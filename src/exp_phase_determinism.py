@@ -46,21 +46,34 @@ from decode_stand import decode_frame  # noqa: E402
 
 
 def load_stand(log: Path):
+    """Audit fix: use 'a' (after DwmFlush = vblank-aligned), NOT 'b'.
+    Also honors the pacing gate written by the repaired stand and skips
+    warm-up rows."""
     idx2ns, wall0, perf0 = {}, None, None
+    pacing = None
     for line in log.read_text(encoding="utf-8").splitlines():
         r = json.loads(line)
         if "wall_utc" in r:
             wall0 = dt.datetime.fromisoformat(r["wall_utc"]).timestamp()
             perf0 = r["perf_ns"]
-        elif "i" in r:
-            idx2ns[r["i"]] = r["b"]
+        elif "pacing" in r:
+            pacing = r["pacing"]
+        elif "i" in r and not r.get("w"):
+            idx2ns[r["i"]] = r["a"]
+    if pacing is not None and not pacing.get("PACING_GATE"):
+        raise RuntimeError(f"stand log FAILED pacing gate: {pacing}")
     return idx2ns, wall0, perf0
 
 
 def take_pairs(video: Path, idx2ns: dict, sample_every: int = 2):
+    """Decode strip indices + temporal-model outlier rejection (audit fix D10):
+    stand_idx must grow linearly with camera frame number (slope =
+    cam_fps/stand_fps^-1). A decoded index off the robust line by >0.75 of a
+    stand frame is a misallocation — dropped. Kills the ±1-stand-frame
+    (±7..33ms) outliers by construction."""
     cap = cv2.VideoCapture(str(video))
     loc = None
-    xs, ys = [], []
+    triples = []  # (frame_n, pts_s, idx)
     n = 0
     while True:
         ret, img = cap.read()
@@ -71,11 +84,31 @@ def take_pairs(video: Path, idx2ns: dict, sample_every: int = 2):
             out = decode_frame(img, loc)
             loc = out["loc"] or loc
             if out["idx"] is not None and out["idx"] in idx2ns:
-                xs.append(pts)
-                ys.append(idx2ns[out["idx"]] / 1e9)  # host seconds
+                triples.append((n, pts, out["idx"]))
         n += 1
     cap.release()
-    return np.array(xs), np.array(ys)
+    if len(triples) < 8:
+        return np.array([]), np.array([])
+    fn = np.array([t[0] for t in triples], dtype=float)
+    idx = np.array([t[2] for t in triples], dtype=float)
+    # robust line idx(fn): median-of-pairwise-slopes (Theil-Sen light)
+    order = np.argsort(fn)
+    fn_s, idx_s = fn[order], idx[order]
+    step = max(1, len(fn_s) // 40)
+    slopes = [(idx_s[j] - idx_s[i]) / (fn_s[j] - fn_s[i])
+              for i in range(0, len(fn_s) - step, step)
+              for j in (i + step,) if fn_s[j] != fn_s[i]]
+    slope = float(np.median(slopes))
+    inter = float(np.median(idx_s - slope * fn_s))
+    resid = idx - (slope * fn + inter)
+    keep = np.abs(resid) <= 0.75
+    kept = [t for t, k in zip(triples, keep) if k]
+    xs = np.array([t[1] for t in kept])
+    ys = np.array([idx2ns[t[2]] / 1e9 for t in kept])
+    dropped = len(triples) - len(kept)
+    if dropped:
+        print(f"    temporal-model dropped {dropped}/{len(triples)} misallocated")
+    return xs, ys
 
 
 def main():
@@ -192,9 +225,15 @@ def main():
         coef, *_ = np.linalg.lstsq(A, ys, rcond=None)
         a_ns = coef[0] * 1e9
         resid = ys - A @ coef
+        # SE of intercept WITH leverage term (audit fix: x=0 is at window edge)
+        s2 = float(np.sum(resid**2)) / max(1, len(xs) - 2)
+        xbar = float(np.mean(xs))
+        sxx = float(np.sum((xs - xbar) ** 2))
+        se_a_ms = float(np.sqrt(s2 * (1.0 / len(xs) + xbar**2 / max(sxx, 1e-12))) * 1000)
         r["intercept_host_ns"] = float(a_ns)
         r["phase_ns"] = float(a_ns % period_ns)
         r["phase_ms"] = float((a_ns % period_ns) / 1e6)
+        r["se_phase_ms"] = round(se_a_ms, 3)
         r["resid_rms_ms"] = float(np.sqrt(np.mean(resid**2)) * 1000)
         r["n"] = len(xs)
         r["start_latency_ms"] = float((a_ns - r["t_cmd_ns"]) / 1e6)
@@ -202,22 +241,41 @@ def main():
         print(f"  take {r['take']}: phase={r['phase_ms']:.2f}ms n={len(xs)} "
               f"resid={r['resid_rms_ms']:.1f}ms")
 
-    phases = [r["phase_ms"] for r in results if r.get("phase_ms") is not None]
-    # фазы циклические (mod period): считаем разброс по кругу
-    summary = {"tag": args.tag, "period_ms": period_ns/1e6, "n_measured": len(phases)}
+    measured = [r for r in results if r.get("phase_ms") is not None]
+    phases = [r["phase_ms"] for r in measured]
+    period_ms = period_ns / 1e6
+    summary = {"tag": args.tag, "period_ms": period_ms, "n_measured": len(phases)}
     if len(phases) >= 3:
         pm = np.array(phases)
-        ang = pm / (period_ns/1e6) * 2*np.pi
+        # ppm-детренд (audit fix): фаза дрейфует линейно со временем сессии;
+        # вычитаем робастный линейный тренд по времени команды дубля
+        tt = np.array([r["t_cmd_ns"] for r in measured], dtype=float) / 1e9
+        tt -= tt[0]
+        unwrapped = np.unwrap(pm / period_ms * 2 * np.pi) / (2 * np.pi) * period_ms
+        if len(tt) >= 3 and tt[-1] > 0:
+            trend = np.polyfit(tt, unwrapped, 1)
+            detrended = unwrapped - np.polyval(trend, tt) + np.mean(unwrapped)
+            summary["trend_ppm_equiv"] = round(float(trend[0] / period_ms * 1e3), 2)
+        else:
+            detrended = unwrapped
+        ang = detrended / period_ms * 2 * np.pi
         R = np.sqrt(np.mean(np.cos(ang))**2 + np.mean(np.sin(ang))**2)
-        circ_std_ms = np.sqrt(-2*np.log(R)) / (2*np.pi) * (period_ns/1e6) if R > 0 else None
+        circ_std_ms = (np.sqrt(-2 * np.log(R)) / (2 * np.pi) * period_ms
+                       if R > 0 else None)
+        # Rayleigh-тест на равномерность (audit fix: не порог, а p-value)
+        z = len(ang) * R**2
+        p_rayleigh = float(np.exp(-z) * (1 + (2*z - z**2) / (4*len(ang))))
+        med_se = float(np.median([r["se_phase_ms"] for r in measured]))
         summary.update({
-            "phase_circular_stdev_ms": float(circ_std_ms) if circ_std_ms else None,
+            "phase_circular_stdev_ms_detrended": round(float(circ_std_ms), 3) if circ_std_ms else None,
+            "rayleigh_p_uniform": round(p_rayleigh, 4),
+            "median_se_phase_ms": round(med_se, 3),
             "phase_values_ms": [round(p, 2) for p in phases],
-            "verdict": ("ДЕТЕРМИНИРОВАНА (фаза постоянна, старт/питание не рандомит)"
-                        if circ_std_ms and circ_std_ms < 2.0 else
-                        "ПЛАВАЕТ (фаза случайна между дублями)")
-            if circ_std_ms is not None else "недостаточно данных",
-            "note": "circ_std << period/sqrt(12)=4.8ms -> deterministic; ~4.8ms -> random uniform"})
+            "verdict": ("ДЕТЕРМИНИРОВАНА" if circ_std_ms is not None and
+                        circ_std_ms < max(2.0, 3 * med_se) and p_rayleigh > 0.1 and R > 0.7
+                        else ("ПЛАВАЕТ (равномерность не отвергнута)" if p_rayleigh > 0.05
+                              else "КЛАСТЕРИЗОВАНА (не равномерна, не константа)")),
+            "note": "вердикт валиден только при n>=30 (аудит); n<30 -> предварительный"})
     out = (REPO / "docs" / "experiments" / "exp09-phase-determinism" /
            f"{args.tag}-{dt.datetime.now():%Y%m%d_%H%M%S}.json")
     out.parent.mkdir(parents=True, exist_ok=True)

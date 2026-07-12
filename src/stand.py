@@ -108,55 +108,119 @@ class StandRenderer:
                       (self.x0, self.strip_y + self.cell * 2 + 24))
 
 
+def _current_refresh_hz() -> float:
+    """Actual panel refresh from Windows (EnumDisplaySettings), not pygame."""
+    class DEVMODE(ctypes.Structure):
+        _fields_ = [("dmDeviceName", ctypes.c_wchar * 32)] + \
+            [(n, ctypes.c_uint16) for n in
+             ("dmSpecVersion", "dmDriverVersion", "dmSize", "dmDriverExtra")] + \
+            [("dmFields", ctypes.c_uint32), ("dmPositionX", ctypes.c_long),
+             ("dmPositionY", ctypes.c_long)] + \
+            [(n, ctypes.c_uint32) for n in
+             ("dmDisplayOrientation", "dmDisplayFixedOutput")] + \
+            [(n, ctypes.c_short) for n in
+             ("dmColor", "dmDuplex", "dmYResolution", "dmTTOption", "dmCollate")] + \
+            [("dmFormName", ctypes.c_wchar * 32), ("dmLogPixels", ctypes.c_uint16)] + \
+            [(n, ctypes.c_uint32) for n in
+             ("dmBitsPerPel", "dmPelsWidth", "dmPelsHeight", "dmDisplayFlags",
+              "dmDisplayFrequency", "dmICMMethod", "dmICMIntent", "dmMediaType",
+              "dmDitherType", "dmReserved1", "dmReserved2",
+              "dmPanningWidth", "dmPanningHeight")]
+    dm = DEVMODE()
+    dm.dmSize = ctypes.sizeof(DEVMODE)
+    ctypes.windll.user32.EnumDisplaySettingsW(None, -1, ctypes.byref(dm))
+    return float(dm.dmDisplayFrequency)
+
+
+def validate_pacing(intervals_ms: list[float], period_ms: float) -> dict:
+    """Pacing gate (audit R0): flips must sit on the vblank grid.
+    Skipped vblanks (~2x period) are allowed but counted; chaos is not."""
+    import statistics
+    # DwmFlush return has ~±1ms jitter around the vblank grid; the frames
+    # themselves land on the grid (verified 2026-07-13: 739/750 within ±1.5ms).
+    ok_lo, ok_hi = period_ms - 1.5, period_ms + 1.5
+    skip_lo, skip_hi = 2 * period_ms - 2.0, 2 * period_ms + 2.0
+    n = len(intervals_ms)
+    on_grid = sum(1 for d in intervals_ms if ok_lo <= d <= ok_hi)
+    skipped = sum(1 for d in intervals_ms if skip_lo <= d <= skip_hi)
+    chaos = n - on_grid - skipped
+    med = statistics.median(intervals_ms) if intervals_ms else 0
+    gate = (abs(med - period_ms) < 0.1) and (chaos / max(1, n) < 0.02)
+    return {"n": n, "median_ms": round(med, 3), "on_grid": on_grid,
+            "skipped_vblank": skipped, "chaos": chaos,
+            "chaos_frac": round(chaos / max(1, n), 4), "PACING_GATE": gate}
+
+
 def run_display(mode: str, minutes: float, flash_period_s: float):
     import pygame
 
     keep_display_awake()
+    # ms-precise sleeps + priority (audit fix A3)
+    ctypes.windll.winmm.timeBeginPeriod(1)
+    ctypes.windll.kernel32.SetPriorityClass(
+        ctypes.windll.kernel32.GetCurrentProcess(), 0x00000080)  # HIGH_PRIORITY
+    hz = _current_refresh_hz()
+    period_ms = 1000.0 / hz
     pygame.init()
     surf = pygame.display.set_mode((0, 0),
                                    pygame.FULLSCREEN | pygame.DOUBLEBUF,
                                    vsync=1)
-    font = pygame.font.SysFont("consolas", 48)
     renderer = StandRenderer(surf.get_size())
     log = (REPO / "docs" / "session-logs" /
            f"stand-{mode}-{dt.datetime.now():%Y%m%d_%H%M%S}.jsonl")
     log.parent.mkdir(parents=True, exist_ok=True)
-    clock = pygame.time.Clock()
     t_end = time.perf_counter_ns() + int(minutes * 60 * 1e9)
     frame_idx = 0
     session_header = {
         "mode": mode, "screen": surf.get_size(), "cell_px": renderer.cell,
         "wall_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "perf_ns": time.perf_counter_ns(), "flash_period_s": flash_period_s,
-        "display_hz_reported": pygame.display.get_current_refresh_rate()
-        if hasattr(pygame.display, "get_current_refresh_rate") else None,
+        "panel_hz": hz, "period_ms": period_ms,
+        "warmup_s": 5.0,
     }
-    with log.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(session_header) + "\n")
-        next_flash_ns = time.perf_counter_ns() + int(flash_period_s * 1e9)
-        try:
-            while time.perf_counter_ns() < t_end:
-                for ev in pygame.event.get():
-                    if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
-                        return
-                flash = False
-                if mode == "flash" and time.perf_counter_ns() >= next_flash_ns:
-                    flash = True
-                    next_flash_ns += int(flash_period_s * 1e9)
-                renderer.draw(surf, frame_idx, flash, font,
-                              extra_text="FLASH" if flash else "",
-                              rows=(mode == "rows"))
-                t_before = time.perf_counter_ns()
-                pygame.display.flip()
-                t_after = time.perf_counter_ns()
-                fh.write(json.dumps({"i": frame_idx, "f": int(flash),
-                                     "b": t_before, "a": t_after}) + "\n")
-                frame_idx += 1
-                clock.tick(0)  # run at vsync pace (flip blocks on vsync)
-        finally:
-            pygame.quit()
-            release_display()
-    print(f"log -> {log}")
+    # DwmFlush blocks until next composition -> real vblank pacing under DWM
+    # (audit fix B4: bare flip() only queues, it does not block)
+    dwm_flush = ctypes.windll.dwmapi.DwmFlush
+    rows_buf: list[str] = []  # log buffered in RAM, no I/O in hot loop (fix B5)
+    next_flash_ns = time.perf_counter_ns() + int(flash_period_s * 1e9)
+    t_start = time.perf_counter_ns()
+    try:
+        while time.perf_counter_ns() < t_end:
+            for ev in pygame.event.get():
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                    t_end = 0
+            flash = False
+            if mode == "flash" and time.perf_counter_ns() >= next_flash_ns:
+                flash = True
+                next_flash_ns += int(flash_period_s * 1e9)
+            renderer.draw(surf, frame_idx, flash, None,  # no font in hot loop (B6)
+                          rows=(mode == "rows"))
+            t_before = time.perf_counter_ns()
+            pygame.display.flip()
+            dwm_flush()
+            t_after = time.perf_counter_ns()
+            rows_buf.append(json.dumps(
+                {"i": frame_idx, "f": int(flash), "b": t_before, "a": t_after,
+                 "w": int(t_after - t_start < 5e9)}))  # w=1 -> warm-up, discard
+            frame_idx += 1
+    finally:
+        pygame.quit()
+        release_display()
+        ctypes.windll.winmm.timeEndPeriod(1)
+        # pacing self-validation from own 'a' timestamps (audit fix V8)
+        a_vals = []
+        for r in rows_buf:
+            d = json.loads(r)
+            if not d["w"]:
+                a_vals.append(d["a"])
+        intervals = [(a_vals[j + 1] - a_vals[j]) / 1e6 for j in range(len(a_vals) - 1)]
+        verdict = validate_pacing(intervals, period_ms)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(session_header) + "\n")
+            fh.write("\n".join(rows_buf) + "\n")
+            fh.write(json.dumps({"pacing": verdict}) + "\n")
+        print(f"log -> {log}")
+        print("PACING:", json.dumps(verdict))
 
 
 def render_selftest(frames: int, out_dir: Path):
