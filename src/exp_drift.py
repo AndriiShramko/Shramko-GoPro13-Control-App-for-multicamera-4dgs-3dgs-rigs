@@ -1,5 +1,9 @@
 """E2 — clock drift, camera vs host QPC (DONE#6).
 
+Operational profile (operator 2026-07-12): takes are <= 5 min (usually <= 1 min),
+so drift is measured on 5-min takes — representative AND sufficient: ~1200
+decoded pairs give a slope CI of a few ppm. Repeat cold/warm for stability.
+
 Camera (1080p30, HyperSmooth OFF, thermal-gated) films the stand counter for
 >= 20 min. The clip is decoded; for each video frame with a readable stand
 index we get pairs (camera_time_s, stand_display_time_s). A linear fit
@@ -80,7 +84,7 @@ def record_with_thermal_gate(cam: WiredGoPro, minutes: float) -> list[dict]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--minutes", type=float, default=22)
+    ap.add_argument("--minutes", type=float, default=5)  # operational profile: takes <= 5 min (operator 2026-07-12)
     ap.add_argument("--stand-log", required=True)
     ap.add_argument("--analyze-only", nargs="*", help="existing chapter files")
     args = ap.parse_args()
