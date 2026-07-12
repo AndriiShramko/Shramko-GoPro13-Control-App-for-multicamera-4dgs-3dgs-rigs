@@ -1,13 +1,12 @@
 """Decode stand frames (Gray-code strip) from video/PNG frames.
 
 Locator/decoder v5 — evolution driven by real footage (2026-07-12):
-  v1 integer row-scan: broke on curved panel + fractional pitch (4/300).
+  v1 integer row-scan: broke on fisheye bow + fractional pitch (4/300).
   v2 blob band + linear pitch from outer anchors: perspective drifted a full
      cell mid-strip (lead anchor mismatched while trail matched).
   v3 quadratic x(u) from 1-2-1 anchor blob trios: blob structure differs
      between sharp renders (no merge) and camera blur (merge) — fragile.
-  v4 1-param projective grid-search: distortion is S-shaped (curved panel +
-     lens), lead wanted k=-0.25 while trail wanted k=+0.05 — no global fit.
+  v4 1-param projective grid-search: distortion is S-shaped (fisheye), lead wanted k=-0.25 while trail wanted k=+0.05 — no global fit.
   v5 run-length barcode decode along the curved strip profile with a locally
      adapting pitch — tolerates smooth ARBITRARY x-distortion. Validation is
      structural: exactly N_CELLS cells and both anchors must match.

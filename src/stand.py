@@ -67,24 +67,38 @@ class StandRenderer:
         # strip sits at 55% height: cameras near the desk see the LOWER part of
         # the panel first (framing probe 2026-07-12 — top of screen got clipped)
         self.strip_y = self.y0 + int(zone_h * 0.55)
+        # E7 multi-row mode: same strip at several heights; a camera frame
+        # exposed during the monitor's top-to-bottom scanout shows a SEAM
+        # (upper rows = index N, lower rows = N-1) — seam position = sub-frame
+        # phase of the exposure relative to the refresh (phase-control-research)
+        self.row_ys = [self.y0 + int(zone_h * f) for f in (0.08, 0.28, 0.48, 0.68, 0.88)]
         self.bar_y = self.y0 + int(zone_h * 0.75)
         self.bar_h = max(10, zone_h // 20)
 
-    def draw(self, surf, frame_idx: int, flash: bool, font=None, extra_text: str = ""):
+    def _draw_strip(self, surf, bits, y):
+        import pygame
+
+        for i, b in enumerate(bits):
+            color = (255, 255, 255) if b else (30, 30, 30)
+            x = self.strip_x0 + i * self.cell
+            # 2x-tall cells: GoPro fisheye bows the strip by ~a cell
+            pygame.draw.rect(surf, color,
+                             (x, y, self.cell - 2, self.cell * 2))
+
+    def draw(self, surf, frame_idx: int, flash: bool, font=None,
+             extra_text: str = "", rows: bool = False):
         import pygame
 
         if flash:
             surf.fill((255, 255, 255))
             return
         surf.fill((0, 0, 0))
-        # sync pattern then Gray-coded frame index, MSB first
         bits = encode_cells(frame_idx)
-        for i, b in enumerate(bits):
-            color = (255, 255, 255) if b else (30, 30, 30)
-            x = self.strip_x0 + i * self.cell
-            # 2x-tall cells: curved panels + wide lens bow the strip by ~a cell
-            pygame.draw.rect(surf, color,
-                             (x, self.strip_y, self.cell - 2, self.cell * 2))
+        if rows:
+            for y in self.row_ys:
+                self._draw_strip(surf, bits, y)
+        else:
+            self._draw_strip(surf, bits, self.strip_y)
         # moving bar (position = sub-second phase at 1 px/frame wrap)
         bar_x = self.x0 + (frame_idx * 7) % max(1, self.zone_w - 40)
         pygame.draw.rect(surf, (255, 255, 255), (bar_x, self.bar_y, 40, self.bar_h))
@@ -130,7 +144,8 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
                     flash = True
                     next_flash_ns += int(flash_period_s * 1e9)
                 renderer.draw(surf, frame_idx, flash, font,
-                              extra_text="FLASH" if flash else "")
+                              extra_text="FLASH" if flash else "",
+                              rows=(mode == "rows"))
                 t_before = time.perf_counter_ns()
                 pygame.display.flip()
                 t_after = time.perf_counter_ns()
@@ -171,6 +186,7 @@ def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("counter"); p.add_argument("--minutes", type=float, default=1)
+    p = sub.add_parser("rows"); p.add_argument("--minutes", type=float, default=5)
     p = sub.add_parser("flash"); p.add_argument("--minutes", type=float, default=1)
     p.add_argument("--period", type=float, default=5.0)
     p = sub.add_parser("render-selftest")
@@ -179,6 +195,8 @@ def main():
     args = ap.parse_args()
     if args.cmd == "counter":
         run_display("counter", args.minutes, 0)
+    elif args.cmd == "rows":
+        run_display("rows", args.minutes, 0)
     elif args.cmd == "flash":
         run_display("flash", args.minutes, args.period)
     else:
