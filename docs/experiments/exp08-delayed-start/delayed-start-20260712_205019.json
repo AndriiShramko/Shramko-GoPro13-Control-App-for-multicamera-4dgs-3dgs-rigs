@@ -1,0 +1,29 @@
+{
+  "summary": {
+    "n_takes": 2,
+    "n_measured": 2,
+    "mean_err_ms": -1802.584171295166,
+    "stdev_err_ms": 45478.2938893455,
+    "min_err_ms": -33960.594177246094,
+    "max_err_ms": 30355.42583465576,
+    "note": "mean = constant offset (QR/scan/display latency); STDEV is the reproducibility of !S start on ONE camera. Compare stdev to E1 HTTP-trigger sigma=17.9ms. NOT inter-camera sync, NOT sub-frame."
+  },
+  "rows": [
+    {
+      "take": 0,
+      "target_wall": "2026-07-12T20:49:41",
+      "target_epoch": 1783882181.0,
+      "file": "t00_GX015613.MP4",
+      "first_stand_idx": 8847,
+      "first_frame_err_ms": 30355.42583465576
+    },
+    {
+      "take": 1,
+      "target_wall": "2026-07-12T20:50:13",
+      "target_epoch": 1783882213.0,
+      "file": "t01_GX015612.MP4",
+      "first_stand_idx": 1906,
+      "first_frame_err_ms": -33960.594177246094
+    }
+  ]
+}
