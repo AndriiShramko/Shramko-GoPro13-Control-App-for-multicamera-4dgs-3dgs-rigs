@@ -276,3 +276,19 @@
 {"path": "/gopro/camera/control/wired_usb?p=1", "code": 200, "t_send": {"wall": 1783874482.5725741, "perf_ns": 544554337958700}, "t_recv": {"wall": 1783874482.680367, "perf_ns": 544554446697700}, "rtt_ms": 108.739}
 {"path": "/gopro/media/last_captured", "code": 200, "t_send": {"wall": 1783874483.6820965, "perf_ns": 544555447530100}, "t_recv": {"wall": 1783874483.7467458, "perf_ns": 544555512783800}, "rtt_ms": 65.2537}
 {"download": "100GOPRO/GX015580.MP4", "bytes": 25925913, "t_send": {"wall": 1783874483.7477436, "perf_ns": 544555513279500}, "t_done": {"wall": 1783874484.4996295, "perf_ns": 544556265504300}}
+{"path": "/gopro/camera/control/wired_usb?p=0", "code": 200, "t_send": {"wall": 1783877010.7176886, "perf_ns": 547082483698600}, "t_recv": {"wall": 1783877010.8261812, "perf_ns": 547082592180700}, "rtt_ms": 108.4821}
+{"path": "/gopro/camera/control/wired_usb?p=1", "code": 200, "t_send": {"wall": 1783877012.82777, "perf_ns": 547084593220300}, "t_recv": {"wall": 1783877012.949074, "perf_ns": 547084714571300}, "rtt_ms": 121.351}
+{"path": "/gopro/camera/state", "code": 200, "t_send": {"wall": 1783877013.9508116, "perf_ns": 547085716654100}, "t_recv": {"wall": 1783877014.0130117, "perf_ns": 547085778810800}, "rtt_ms": 62.1567}
+{"path": "/gopro/camera/shutter/start", "code": 200, "t_send": {"wall": 1783877014.0130117, "perf_ns": 547085779340600}, "t_recv": {"wall": 1783877014.5073225, "perf_ns": 547086273595200}, "rtt_ms": 494.2546}
+{"path": "/gopro/camera/keep_alive", "code": 200, "t_send": {"wall": 1783877016.9521616, "perf_ns": 547088717868800}, "t_recv": {"wall": 1783877017.046101, "perf_ns": 547088812459600}, "rtt_ms": 94.5908}
+{"path": "/gopro/camera/shutter/stop", "code": 200, "t_send": {"wall": 1783877017.5092864, "perf_ns": 547089274717400}, "t_recv": {"wall": 1783877017.5689187, "perf_ns": 547089334551000}, "rtt_ms": 59.8336}
+{"path": "/gopro/camera/state", "code": 200, "t_send": {"wall": 1783877017.5689187, "perf_ns": 547089335045300}, "t_recv": {"wall": 1783877017.604275, "perf_ns": 547089370155800}, "rtt_ms": 35.1105}
+{"path": "/gopro/camera/state", "code": 200, "t_send": {"wall": 1783877017.855453, "perf_ns": 547089620978300}, "t_recv": {"wall": 1783877017.9162836, "perf_ns": 547089682016100}, "rtt_ms": 61.0378}
+{"path": "/gopro/camera/state", "code": 200, "t_send": {"wall": 1783877018.1681845, "perf_ns": 547089933612900}, "t_recv": {"wall": 1783877018.2335582, "perf_ns": 547089999031500}, "rtt_ms": 65.4186}
+{"path": "/gopro/camera/state", "code": 200, "t_send": {"wall": 1783877018.4844682, "perf_ns": 547090249884500}, "t_recv": {"wall": 1783877018.5226476, "perf_ns": 547090288225300}, "rtt_ms": 38.3408}
+{"path": "/gopro/camera/state", "code": 200, "t_send": {"wall": 1783877018.7740035, "perf_ns": 547090539545600}, "t_recv": {"wall": 1783877018.888602, "perf_ns": 547090654004700}, "rtt_ms": 114.4591}
+{"path": "/gopro/media/last_captured", "code": 200, "t_send": {"wall": 1783877018.888602, "perf_ns": 547090654520900}, "t_recv": {"wall": 1783877018.960778, "perf_ns": 547090726444200}, "rtt_ms": 71.9233}
+{"path": "/gopro/camera/control/wired_usb?p=0", "code": 200, "t_send": {"wall": 1783877032.3672326, "perf_ns": 547104132958800}, "t_recv": {"wall": 1783877032.5842574, "perf_ns": 547104349732700}, "rtt_ms": 216.7739}
+{"path": "/gopro/camera/control/wired_usb?p=1", "code": 200, "t_send": {"wall": 1783877034.5852637, "perf_ns": 547106350667500}, "t_recv": {"wall": 1783877034.6769454, "perf_ns": 547106442409500}, "rtt_ms": 91.742}
+{"path": "/gopro/media/last_captured", "code": 200, "t_send": {"wall": 1783877035.6781614, "perf_ns": 547107443612600}, "t_recv": {"wall": 1783877035.742813, "perf_ns": 547107509158800}, "rtt_ms": 65.5462}
+{"download": "100GOPRO/GX015612.MP4", "bytes": 1913061, "t_send": {"wall": 1783877035.7438145, "perf_ns": 547107509691400}, "t_done": {"wall": 1783877035.8275084, "perf_ns": 547107593710700}}

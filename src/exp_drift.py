@@ -89,11 +89,6 @@ def main():
     ap.add_argument("--analyze-only", nargs="*", help="existing chapter files")
     args = ap.parse_args()
 
-    stand_logs = sorted(glob.glob(args.stand_log))
-    if not stand_logs:
-        sys.exit("stand log not found")
-    idx2ns = load_stand_index(Path(stand_logs[-1]))
-
     out_dir = REPO / "docs" / "experiments" / "exp02-drift"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -133,6 +128,12 @@ def main():
             chapters.append(dest)
         cam.stop_keep_alive()
 
+    # load the stand map ONLY NOW: loading before the recording froze a map
+    # that missed the whole take (E2 run 2026-07-12 -> 0 pairs)
+    stand_logs = sorted(glob.glob(args.stand_log))
+    if not stand_logs:
+        sys.exit("stand log not found")
+    idx2ns = load_stand_index(Path(stand_logs[-1]))
     pairs = []
     for ch in chapters:
         got = decode_pairs(ch, idx2ns)
