@@ -139,6 +139,20 @@ def main():
         cam.wait_idle()
         t_cmd = time.perf_counter_ns()
         cam.shutter_start()
+        # в 4K 8:7@60 encoding стартует через ~3.1с после команды (измерено);
+        # длительность отсчитываем от РЕАЛЬНОГО начала записи
+        t_enc = None
+        t_wait0 = time.perf_counter_ns()
+        while time.perf_counter_ns() - t_wait0 < 10e9:
+            if cam.flags()["encoding"]:
+                t_enc = time.perf_counter_ns()
+                break
+            time.sleep(0.05)
+        if t_enc is None:
+            print(f"take {i}: encoding never started — skip")
+            cam.shutter_stop()
+            cam.wait_idle()
+            continue
         time.sleep(args.seconds)
         cam.shutter_stop()
         cam.wait_idle()
@@ -146,7 +160,8 @@ def main():
         dest = take_dir / f"t{i:02d}_{last['file']}"
         cam.download(last["folder"], last["file"], dest)  # verifies size + retries
         cam.delete_file(last["folder"], last["file"])
-        rows.append({"take": i, "t_cmd_ns": t_cmd, "file": dest.name})
+        rows.append({"take": i, "t_cmd_ns": t_cmd, "t_enc_ns": t_enc,
+                     "enc_delay_ms": (t_enc - t_cmd) / 1e6, "file": dest.name})
         print(f"take {i}: {dest.name}")
         time.sleep(args.pause)
     cam.stop_keep_alive()
