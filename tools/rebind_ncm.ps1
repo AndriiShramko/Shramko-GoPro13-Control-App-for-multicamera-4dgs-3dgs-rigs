@@ -9,9 +9,12 @@ $log = "C:\Users\andri\AppData\Local\Temp\ncm_rebind.log"
 
 $dev = Get-PnpDevice -Class Net -EA SilentlyContinue | Where-Object { $_.InstanceId -match 'VID_2672' }
 if (-not $dev) {
-    $dev = Get-PnpDevice -EA SilentlyContinue | Where-Object { $_.InstanceId -match 'VID_2672&PID_....&MI_00' }
+    $dev = Get-PnpDevice -EA SilentlyContinue | Where-Object { $_.InstanceId -match 'VID_2672.*MI_00' }
 }
 if (-not $dev) { "no VID_2672 MI_00 device" | Out-File $log -Append -Encoding utf8; exit 2 }
+
+# ГВАРД: если драйвер уже OK — НЕ трогать (иначе disable/enable зря дёргает рабочую камеру)
+if ($dev.Status -eq 'OK') { "already OK, no-op" | Out-File $log -Append -Encoding utf8; exit 0 }
 
 $id = $dev.InstanceId
 "device: $id status=$($dev.Status)" | Out-File $log -Append -Encoding utf8
