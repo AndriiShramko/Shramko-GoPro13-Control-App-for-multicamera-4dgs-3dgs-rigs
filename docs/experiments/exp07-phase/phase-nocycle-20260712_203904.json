@@ -1,0 +1,75 @@
+{
+  "tag": "nocycle",
+  "takes": [
+    {
+      "clip": "t00_GX015616.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.0,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t01_GX015617.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.08,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t02_GX015618.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.0,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t03_GX015619.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.032,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t04_GX015620.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.146,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t05_GX015621.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.759,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t06_GX015622.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.769,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t07_GX015623.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.0,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t08_GX015624.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.238,
+      "n_seams": 0,
+      "seams": []
+    },
+    {
+      "clip": "t09_GX015625.MP4",
+      "fps": 29.97002997002997,
+      "row_decode_rate": 0.428,
+      "n_seams": 0,
+      "seams": []
+    }
+  ]
+}
