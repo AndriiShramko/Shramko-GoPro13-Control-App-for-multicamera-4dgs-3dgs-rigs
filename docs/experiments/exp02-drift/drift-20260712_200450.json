@@ -1,0 +1,12 @@
+{
+  "n_pairs": 226,
+  "span_s": 272.7795182999689,
+  "slope": 1.000014625706447,
+  "drift_ppm": 14.625706447057851,
+  "ci95_ppm": 11.617828638491597,
+  "resid_rms_ms": 6.187984080564201,
+  "chapters": [
+    "GX015613.MP4"
+  ],
+  "chain": "QPC(host) -> stand flip log -> decoded Gray index -> video PTS (container)"
+}

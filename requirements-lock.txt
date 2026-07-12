@@ -36,6 +36,7 @@ pydantic_core==2.46.4
 pygame==2.6.1
 Pygments==2.20.0
 pyparsing==3.3.2
+pyserial==3.5
 python-dateutil==2.9.0.post0
 pytz==2026.2
 qrcode==8.2
