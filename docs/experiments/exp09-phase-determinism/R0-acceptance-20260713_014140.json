@@ -1,0 +1,39 @@
+{
+  "summary": {
+    "tag": "R0-acceptance",
+    "period_ms": 16.683333333333334,
+    "n_measured": 2
+  },
+  "takes": [
+    {
+      "take": 0,
+      "t_cmd_ns": 569435850869700,
+      "t_enc_ns": 569438922760400,
+      "enc_delay_ms": 3071.8907,
+      "file": "t00_GX015688.MP4",
+      "clip_fps": 59.94,
+      "intercept_host_ns": 569439190783440.6,
+      "phase_ns": 3800107.270474596,
+      "phase_ms": 3.8001072704745957,
+      "se_phase_ms": 0.061,
+      "resid_rms_ms": 0.33787581173169956,
+      "n": 353,
+      "start_latency_ms": 3339.913740625
+    },
+    {
+      "take": 1,
+      "t_cmd_ns": 569485955549900,
+      "t_enc_ns": 569489023570100,
+      "enc_delay_ms": 3068.0202,
+      "file": "t01_GX015689.MP4",
+      "clip_fps": 59.94,
+      "intercept_host_ns": 569489290829762.8,
+      "phase_ns": 3796429.3954727314,
+      "phase_ms": 3.7964293954727313,
+      "se_phase_ms": 0.044,
+      "resid_rms_ms": 0.34750981395317393,
+      "n": 253,
+      "start_latency_ms": 3335.27986275
+    }
+  ]
+}

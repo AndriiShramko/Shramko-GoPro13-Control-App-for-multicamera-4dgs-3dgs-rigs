@@ -1,0 +1,29 @@
+{
+  "summary": {
+    "tag": "R0-acceptance",
+    "period_ms": 16.683333333333334,
+    "n_measured": 0
+  },
+  "takes": [
+    {
+      "take": 0,
+      "t_cmd_ns": 568970011540200,
+      "t_enc_ns": 568973099378500,
+      "enc_delay_ms": 3087.8383,
+      "file": "t00_GX015686.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    },
+    {
+      "take": 1,
+      "t_cmd_ns": 569020194443900,
+      "t_enc_ns": 569023248267600,
+      "enc_delay_ms": 3053.8237,
+      "file": "t01_GX015687.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    }
+  ]
+}
