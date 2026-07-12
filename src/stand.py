@@ -181,7 +181,14 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
     # DwmFlush blocks until next composition -> real vblank pacing under DWM
     # (audit fix B4: bare flip() only queues, it does not block)
     dwm_flush = ctypes.windll.dwmapi.DwmFlush
-    rows_buf: list[str] = []  # log buffered in RAM, no I/O in hot loop (fix B5)
+    # Log: header immediately (so experiments can discover the live log),
+    # rows flushed in 3s batches — one buffered write per ~90 frames is
+    # harmless; what killed pacing was dumps+write+font EVERY frame.
+    fh = log.open("a", encoding="utf-8", buffering=1 << 20)
+    fh.write(json.dumps(session_header) + "\n")
+    fh.flush()
+    rows_buf: list[str] = []
+    all_a: list[tuple[int, int]] = []  # (a_ns, warmup) for final pacing verdict
     next_flash_ns = time.perf_counter_ns() + int(flash_period_s * 1e9)
     t_start = time.perf_counter_ns()
     try:
@@ -199,26 +206,27 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
             pygame.display.flip()
             dwm_flush()
             t_after = time.perf_counter_ns()
+            warm = int(t_after - t_start < 5e9)
             rows_buf.append(json.dumps(
                 {"i": frame_idx, "f": int(flash), "b": t_before, "a": t_after,
-                 "w": int(t_after - t_start < 5e9)}))  # w=1 -> warm-up, discard
+                 "w": warm}))
+            all_a.append((t_after, warm))
+            if len(rows_buf) >= 90:  # ~3s batch
+                fh.write("\n".join(rows_buf) + "\n")
+                fh.flush()
+                rows_buf.clear()
             frame_idx += 1
     finally:
         pygame.quit()
         release_display()
         ctypes.windll.winmm.timeEndPeriod(1)
-        # pacing self-validation from own 'a' timestamps (audit fix V8)
-        a_vals = []
-        for r in rows_buf:
-            d = json.loads(r)
-            if not d["w"]:
-                a_vals.append(d["a"])
+        a_vals = [a for a, w in all_a if not w]
         intervals = [(a_vals[j + 1] - a_vals[j]) / 1e6 for j in range(len(a_vals) - 1)]
         verdict = validate_pacing(intervals, period_ms)
-        with log.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(session_header) + "\n")
+        if rows_buf:
             fh.write("\n".join(rows_buf) + "\n")
-            fh.write(json.dumps({"pacing": verdict}) + "\n")
+        fh.write(json.dumps({"pacing": verdict}) + "\n")
+        fh.close()
         print(f"log -> {log}")
         print("PACING:", json.dumps(verdict))
 
