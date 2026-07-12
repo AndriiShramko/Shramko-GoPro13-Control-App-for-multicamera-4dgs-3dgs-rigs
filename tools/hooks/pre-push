@@ -1,0 +1,9 @@
+#!/bin/sh
+# Block any push to main from this working copy (research branch discipline)
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "BLOCKED: push to main is forbidden from this clone (research/usb-sync-experiments only)." >&2
+    exit 1
+  fi
+done
+exit 0
