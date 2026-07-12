@@ -1,0 +1,202 @@
+"""Thin Open GoPro HTTP-over-USB client (stock firmware, HERO13).
+
+Deliberately requests-only (no open-gopro SDK dependency) so it doubles as a
+diagnostic tool. Every camera call is logged with both wall-clock and
+QueryPerformanceCounter-grade timestamps (time.perf_counter_ns) because this
+project's experiments (start-latency jitter, drift) need a stable host
+timebase, not just responses.
+
+Endpoints per Open GoPro HTTP API 2.0 (https://gopro.github.io/OpenGoPro/http/),
+snapshot in docs/api/. Camera IP over USB is the host adapter's gateway
+(172.2X.1YZ.51 where XYZ = last 3 digits of serial); we discover it from
+`ipconfig /all` instead of deriving from the serial — more robust.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import threading
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import requests
+
+KEEP_ALIVE_PERIOD_S = 3.0  # community figure; validated empirically in E0 logs
+HTTP_TIMEOUT_S = 5.0
+# HERO13 status IDs we rely on (Open GoPro "state" statuses; verified on camera in E0):
+STATUS_SYSTEM_HOT = "6"
+STATUS_SYSTEM_BUSY = "8"
+STATUS_ENCODING = "10"
+STATUS_INTERNAL_BATTERY_PERCENT = "70"
+STATUS_SD_STATUS = "33"
+
+
+def _now() -> dict:
+    return {"wall": time.time(), "perf_ns": time.perf_counter_ns()}
+
+
+@dataclass
+class CallLog:
+    path: Path
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def write(self, record: dict) -> None:
+        line = json.dumps(record, ensure_ascii=False)
+        with self._lock:
+            with self.path.open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+
+
+def discover_camera_ips() -> list[str]:
+    """Find candidate GoPro IPs: default gateways of adapters in 172.16-31/12
+    whose gateway ends in .51 (GoPro's fixed self-address over USB NCM)."""
+    out = subprocess.run(
+        ["ipconfig", "/all"], capture_output=True, text=True, check=True
+    ).stdout
+    blocks = re.split(r"\r?\n(?=\S)", out)
+    ips: list[str] = []
+    for block in blocks:
+        gw = re.search(r"Default Gateway[ .:]*(\d+\.\d+\.\d+\.\d+)", block)
+        if not gw:
+            continue
+        ip = gw.group(1)
+        first, second = (int(x) for x in ip.split(".")[:2])
+        if first == 172 and 16 <= second <= 31 and ip.endswith(".51"):
+            ips.append(ip)
+    return ips
+
+
+class WiredGoPro:
+    def __init__(self, ip: str, log_path: Path | None = None):
+        self.ip = ip
+        self.base = f"http://{ip}:8080"
+        self.session = requests.Session()
+        self.log = CallLog(log_path) if log_path else None
+        self._keep_alive_stop = threading.Event()
+        self._keep_alive_thread: threading.Thread | None = None
+
+    # -- core ----------------------------------------------------------------
+    def get(self, path: str, timeout: float = HTTP_TIMEOUT_S, log_body: bool = False):
+        t0 = _now()
+        url = self.base + path
+        try:
+            resp = self.session.get(url, timeout=timeout)
+            t1 = _now()
+            rec = {
+                "path": path, "code": resp.status_code,
+                "t_send": t0, "t_recv": t1,
+                "rtt_ms": (t1["perf_ns"] - t0["perf_ns"]) / 1e6,
+            }
+            if log_body and len(resp.content) < 4096:
+                rec["body"] = resp.text
+            if self.log:
+                self.log.write(rec)
+            return resp
+        except requests.RequestException as exc:
+            if self.log:
+                self.log.write({"path": path, "error": repr(exc), "t_send": t0})
+            raise
+
+    # -- lifecycle -----------------------------------------------------------
+    def enable_wired_control(self):
+        """Old-repo verified sequence: off -> 2 s -> on, then ~1 s to stabilize.
+        HTTP 500 here means 'already in that state' and counts as success."""
+        try:
+            self.get("/gopro/camera/control/wired_usb?p=0")
+        except requests.RequestException:
+            pass
+        time.sleep(2.0)
+        resp = self.get("/gopro/camera/control/wired_usb?p=1")
+        if resp.status_code not in (200, 500):
+            raise RuntimeError(f"wired_usb enable failed: {resp.status_code}")
+        time.sleep(1.0)
+        return resp
+
+    def start_keep_alive(self):
+        def loop():
+            while not self._keep_alive_stop.wait(KEEP_ALIVE_PERIOD_S):
+                try:
+                    self.get("/gopro/camera/keep_alive")
+                except requests.RequestException:
+                    pass  # logged already; next tick retries
+
+        self._keep_alive_thread = threading.Thread(target=loop, daemon=True)
+        self._keep_alive_thread.start()
+
+    def stop_keep_alive(self):
+        self._keep_alive_stop.set()
+
+    # -- info / state ---------------------------------------------------------
+    def info(self) -> dict:
+        return self.get("/gopro/camera/info", log_body=True).json()
+
+    def state(self) -> dict:
+        return self.get("/gopro/camera/state").json()
+
+    def flags(self) -> dict:
+        st = self.state().get("status", {})
+        return {
+            "hot": bool(st.get(STATUS_SYSTEM_HOT, 0)),
+            "busy": bool(st.get(STATUS_SYSTEM_BUSY, 0)),
+            "encoding": bool(st.get(STATUS_ENCODING, 0)),
+            "battery_pct": st.get(STATUS_INTERNAL_BATTERY_PERCENT),
+        }
+
+    def require_cool_and_idle(self):
+        f = self.flags()
+        if f["hot"]:
+            raise RuntimeError(f"camera reports System Hot: {f}")
+        if f["busy"] or f["encoding"]:
+            raise RuntimeError(f"camera busy/encoding: {f}")
+        return f
+
+    # -- recording -----------------------------------------------------------
+    def shutter_start(self):
+        return self.get("/gopro/camera/shutter/start")
+
+    def shutter_stop(self):
+        """503 = camera still finalizing; old repo's proven recipe: 3 retries, 1 s."""
+        for attempt in range(4):
+            resp = self.get("/gopro/camera/shutter/stop")
+            if resp.status_code != 503:
+                return resp
+            time.sleep(1.0)
+        return resp
+
+    # -- settings ------------------------------------------------------------
+    def set_setting(self, setting_id: int, option_id: int):
+        return self.get(f"/gopro/camera/setting?setting={setting_id}&option={option_id}")
+
+    # -- media ---------------------------------------------------------------
+    def media_list(self) -> dict:
+        return self.get("/gopro/media/list").json()
+
+    def last_captured(self) -> dict:
+        return self.get("/gopro/media/last_captured").json()
+
+    def download(self, directory: str, filename: str, dest: Path,
+                 chunk: int = 1 << 20) -> Path:
+        url = f"{self.base}/videos/DCIM/{directory}/{filename}"
+        t0 = _now()
+        with self.session.get(url, stream=True, timeout=30) as resp:
+            resp.raise_for_status()
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with dest.open("wb") as fh:
+                for part in resp.iter_content(chunk):
+                    fh.write(part)
+        if self.log:
+            self.log.write({"download": f"{directory}/{filename}",
+                            "bytes": dest.stat().st_size, "t_send": t0, "t_done": _now()})
+        return dest
+
+    def gpmf(self, directory: str, filename: str) -> bytes:
+        resp = self.get(f"/gopro/media/gpmf?path={directory}/{filename}", timeout=30)
+        resp.raise_for_status()
+        return resp.content
+
+    def delete_file(self, directory: str, filename: str):
+        # Open GoPro media delete endpoint; verified against docs snapshot in docs/api/
+        return self.get(f"/gopro/media/delete/file?path={directory}/{filename}")
