@@ -59,7 +59,11 @@ class StandRenderer:
         self.x0 = (self.w - zone_w) // 2
         self.y0 = (self.h - zone_h) // 2
         self.zone_w, self.zone_h = zone_w, zone_h
-        self.cell = max(8, zone_w // N_CELLS)
+        # the STRIP alone uses 92% of screen width: at operator's camera
+        # distance 60%-zone cells washed out optically (grey-zone gaps lost)
+        strip_w = int(self.w * 0.92)
+        self.strip_x0 = (self.w - strip_w) // 2
+        self.cell = max(8, strip_w // N_CELLS)
         # strip sits at 55% height: cameras near the desk see the LOWER part of
         # the panel first (framing probe 2026-07-12 — top of screen got clipped)
         self.strip_y = self.y0 + int(zone_h * 0.55)
@@ -77,7 +81,7 @@ class StandRenderer:
         bits = encode_cells(frame_idx)
         for i, b in enumerate(bits):
             color = (255, 255, 255) if b else (30, 30, 30)
-            x = self.x0 + i * self.cell
+            x = self.strip_x0 + i * self.cell
             # 2x-tall cells: curved panels + wide lens bow the strip by ~a cell
             pygame.draw.rect(surf, color,
                              (x, self.strip_y, self.cell - 2, self.cell * 2))

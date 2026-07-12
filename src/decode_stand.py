@@ -93,29 +93,47 @@ def find_strip(gray_img: np.ndarray):
     band = sorted(best, key=lambda b: b[0])
     heights = sorted(b[3] for b in band)
     med_h = heights[len(heights) // 2]
-    band = [b for b in band if b[3] >= 0.55 * med_h]  # drop text glyphs
+    band = [b for b in band if b[3] >= 0.55 * med_h]
     if len(band) < 6:
         return None
-    if band[-1][0] - band[0][0] < N_CELLS * 4:
-        return None
-    # Outermost blobs are the always-lit single cells u=0 / u=39 (their inner
-    # neighbours are 0-bits by pattern design) -> exact strip extent.
-    approx_pitch = (band[-1][0] - band[0][0]) / (N_CELLS - 1)
     xs = np.array([b[0] for b in band])
     ys = np.array([b[1] for b in band])
     ycoef = np.polyfit(xs, ys, 2 if len(band) >= 5 else 1)
+    # Second pass along the FITTED CURVE: the first horizontal window both
+    # truncates a bowed strip at its far end and admits the counter text
+    # (drift-frame 2026-07-12: text glyphs h16 vs cells h30 poisoned the band,
+    # xb landed mid-strip). Re-collect against the curve, reject short blobs.
+    med_h2 = med_h
+    for _ in range(2):
+        band2 = [b for b in blobs
+                 if abs(b[1] - float(np.polyval(ycoef, b[0]))) <= 0.9 * med_h2
+                 and b[3] >= 0.7 * med_h2]
+        if len(band2) < 6:
+            return None
+        band2 = sorted(band2, key=lambda b: b[0])
+        hs = sorted(b[3] for b in band2)
+        med_h2 = hs[len(hs) // 2]
+        xs = np.array([b[0] for b in band2])
+        ys = np.array([b[1] for b in band2])
+        ycoef = np.polyfit(xs, ys, 2 if len(band2) >= 5 else 1)
+    band = band2
+    if band[-1][0] - band[0][0] < N_CELLS * 4:
+        return None
+    # Outermost blobs are the markers (always lit) -> strip extent.
+    approx_pitch = (band[-1][0] - band[0][0]) / (N_CELLS - 1)
     return {"xa": float(band[0][0]), "xb": float(band[-1][0]),
             "pitch": float(approx_pitch),
-            "ycoef": ycoef.tolist(), "cell_h": float(med_h)}
+            "ycoef": ycoef.tolist(), "cell_h": float(med_h2)}
 
 
 def _profile(gray_img: np.ndarray, loc: dict):
     """Mean-intensity profile along the (curved) strip line."""
     h, w = gray_img.shape
     half_h = max(3, int(loc["cell_h"] * 0.30))
-    x0 = max(0, int(loc["xa"] - 1.5 * loc["pitch"]))
-    x1 = min(w - 1, int(loc["xb"] + 1.5 * loc["pitch"]))
-    xs = np.arange(x0, x1 + 1)
+    # FULL image width: blob extremes lied about strip extent (right cells
+    # fused into one 111px blob) — first/last bright profile sample defines
+    # the extent; Manchester validation rejects stray bright objects
+    xs = np.arange(0, w)
     cys = np.polyval(np.array(loc["ycoef"]), xs).astype(int)
     prof = np.empty(len(xs), dtype=np.float32)
     for j in range(len(xs)):
@@ -127,8 +145,8 @@ def _profile(gray_img: np.ndarray, loc: dict):
 def _decode_runs(runs: list[tuple[int, float]]):
     """Sequential decode with per-run pitch adaptation. Runs are 1..3 cells by
     construction, so calibration never starves. Returns frame idx or None."""
-    if len(runs) < 5 or runs[0][0] != 1 or runs[-1][0] != 1:
-        return None
+    if len(runs) < 5 or runs[0][0] != 1:
+        return None  # end is validated by END_MARKER, not by the last run
     # seed the local pitch from the start marker itself: its first run is
     # exactly 3 cells by construction (global mean mis-seeds under perspective)
     pitch = runs[0][1] / 3.0
@@ -137,8 +155,8 @@ def _decode_runs(runs: list[tuple[int, float]]):
         n = min(3, max(1, round(length / pitch)))
         cells.extend([int(val)] * n)
         pitch = 0.7 * pitch + 0.3 * (length / n)
-        if len(cells) > N_CELLS:
-            return None
+        if len(cells) >= N_CELLS:
+            break  # trailing runs may be scenery beyond the strip — ignored
     if len(cells) != N_CELLS:
         return None
     if (cells[:len(START_MARKER)] != START_MARKER
@@ -171,17 +189,13 @@ def decode_frame(img: np.ndarray, loc: dict | None = None):
     hi = float(np.percentile(prof, 90))
     if hi - lo < 30:
         return {"flash": 0, "idx": None, "loc": None}
-    win = max(9, int(3 * loc["pitch"]))
+    win = max(9, int(3 * loc["cell_h"]))  # cells ~square; blob pitch unreliable
     pad = win // 2
     padded = np.pad(prof, pad, mode="edge")
     view = np.lib.stride_tricks.sliding_window_view(padded, win)[:len(prof)]
     thr = np.maximum((view.min(axis=1) + view.max(axis=1)) / 2,
                      lo + 0.30 * (hi - lo))
     binary = (prof > thr).astype(np.int8)
-    on = np.flatnonzero(binary)
-    if len(on) == 0:
-        return {"flash": 0, "idx": None, "loc": None}
-    binary = binary[on[0]:on[-1] + 1]
     runs = []
     val, start = int(binary[0]), 0
     for j in range(1, len(binary)):
@@ -189,6 +203,8 @@ def decode_frame(img: np.ndarray, loc: dict | None = None):
             runs.append((val, float(j - start)))
             val, start = int(binary[j]), j
     runs.append((val, float(len(binary) - start)))
+    pitch_est = (loc.get("xb", 0) - loc.get("xa", 0)) / (N_CELLS - 1) or loc["cell_h"]
+    loc = dict(loc, pitch=max(loc["cell_h"] * 0.4, pitch_est))
     # merge sub-cell cosmetic gaps/nicks into neighbours
     clean: list[list] = []
     i = 0
@@ -203,10 +219,17 @@ def decode_frame(img: np.ndarray, loc: dict | None = None):
         else:
             clean.append([val, length])
         i += 1
-    idx = _decode_runs([(v, l) for v, l in clean])
-    if idx is None:
-        return {"flash": 0, "idx": None, "loc": None}
-    return {"flash": 0, "idx": idx, "loc": loc}
+    # frame edges can be bright scenery (wall/door beyond the monitor), so no
+    # global extent trim: try every bright run as the start marker; the decoder
+    # itself validates the stop (exactly N_CELLS + both markers + Manchester)
+    cruns = [(v, l) for v, l in clean]
+    for i, (v, _) in enumerate(cruns):
+        if v != 1:
+            continue
+        idx = _decode_runs(cruns[i:])
+        if idx is not None:
+            return {"flash": 0, "idx": idx, "loc": loc}
+    return {"flash": 0, "idx": None, "loc": None}
 
 
 def run_selftest(d: Path) -> int:
