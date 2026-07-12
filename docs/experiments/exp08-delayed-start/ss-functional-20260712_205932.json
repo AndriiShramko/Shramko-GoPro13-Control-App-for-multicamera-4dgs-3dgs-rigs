@@ -1,0 +1,44 @@
+{
+  "summary": {
+    "n_takes": 6,
+    "n_fired": 0
+  },
+  "rows": [
+    {
+      "take": 0,
+      "target": "2026-07-12T20:58:19",
+      "fired": false,
+      "err_ms": null
+    },
+    {
+      "take": 1,
+      "target": "2026-07-12T20:58:32",
+      "fired": false,
+      "err_ms": null
+    },
+    {
+      "take": 2,
+      "target": "2026-07-12T20:58:45",
+      "fired": false,
+      "err_ms": null
+    },
+    {
+      "take": 3,
+      "target": "2026-07-12T20:58:58",
+      "fired": false,
+      "err_ms": null
+    },
+    {
+      "take": 4,
+      "target": "2026-07-12T20:59:11",
+      "fired": false,
+      "err_ms": null
+    },
+    {
+      "take": 5,
+      "target": "2026-07-12T20:59:24",
+      "fired": false,
+      "err_ms": null
+    }
+  ]
+}

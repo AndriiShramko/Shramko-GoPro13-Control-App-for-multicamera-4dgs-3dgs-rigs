@@ -87,7 +87,7 @@ def main():
     ap.add_argument("--fps", type=float, default=60000/1001)
     args = ap.parse_args()
 
-    logs = sorted(glob.glob(str(REPO / "docs" / "session-logs" / "stand-counter-*.jsonl")))
+    logs = sorted([f for f in glob.glob(str(REPO / "docs" / "session-logs" / "stand-counter-*.jsonl")) if "exp" not in Path(f).name])
     if not logs:
         sys.exit("start src/stand.py counter first")
     stand_log = Path(logs[-1])

@@ -187,20 +187,53 @@ class WiredGoPro:
     def last_captured(self) -> dict:
         return self.get("/gopro/media/last_captured").json()
 
+    def expected_size(self, directory: str, filename: str) -> int | None:
+        """Size the camera reports for a file (from media list) — the download
+        target to verify against (flaky USB truncates downloads silently)."""
+        for m in self.media_list().get("media", []):
+            if m.get("d") != directory:
+                continue
+            for f in m.get("fs", []):
+                if f.get("n") == filename:
+                    return int(f.get("s", 0)) or None
+        return None
+
     def download(self, directory: str, filename: str, dest: Path,
-                 chunk: int = 1 << 20) -> Path:
+                 chunk: int = 1 << 20, retries: int = 3) -> Path:
+        """Download with size verification + retry. A degraded USB connection
+        (observed after hours of use) silently truncates the stream, so we
+        compare against the camera-reported size and retry (found: 4K60 clips
+        arriving as 1.7MB instead of ~100MB)."""
         url = f"{self.base}/videos/DCIM/{directory}/{filename}"
-        t0 = _now()
-        with self.session.get(url, stream=True, timeout=30) as resp:
-            resp.raise_for_status()
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with dest.open("wb") as fh:
-                for part in resp.iter_content(chunk):
-                    fh.write(part)
-        if self.log:
-            self.log.write({"download": f"{directory}/{filename}",
-                            "bytes": dest.stat().st_size, "t_send": t0, "t_done": _now()})
-        return dest
+        want = self.expected_size(directory, filename)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        last_got = -1
+        for attempt in range(retries):
+            t0 = _now()
+            try:
+                with self.session.get(url, stream=True, timeout=(10, 60)) as resp:
+                    resp.raise_for_status()
+                    with dest.open("wb") as fh:
+                        for part in resp.iter_content(chunk):
+                            fh.write(part)
+            except requests.RequestException as exc:
+                if self.log:
+                    self.log.write({"download_error": f"{directory}/{filename}",
+                                    "attempt": attempt, "error": repr(exc)})
+                time.sleep(2)
+                continue
+            got = dest.stat().st_size
+            last_got = got
+            ok = want is None or got >= want * 0.999
+            if self.log:
+                self.log.write({"download": f"{directory}/{filename}",
+                                "bytes": got, "expected": want, "ok": ok,
+                                "attempt": attempt, "t_send": t0, "t_done": _now()})
+            if ok:
+                return dest
+            time.sleep(2)  # truncated — retry
+        raise RuntimeError(f"download truncated after {retries} tries: "
+                           f"got {last_got} of {want} bytes ({directory}/{filename})")
 
     def gpmf(self, directory: str, filename: str) -> bytes:
         resp = self.get(f"/gopro/media/gpmf?path={directory}/{filename}", timeout=30)
