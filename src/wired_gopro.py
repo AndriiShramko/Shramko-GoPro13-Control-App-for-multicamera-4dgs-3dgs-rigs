@@ -197,6 +197,22 @@ class WiredGoPro:
     def set_setting(self, setting_id: int, option_id: int):
         return self.get(f"/gopro/camera/setting?setting={setting_id}&option={option_id}")
 
+    def lock_exposure(self, shutter_opt: int = 22, iso_opt: int = 8,
+                      wb_opt: int = 12) -> dict:
+        """Full manual exposure via UNdocumented-but-working Protune IDs
+        (verified on HERO13, OpenGoPro#903). Defaults: shutter 1/480 (opt 22),
+        ISO 100 (opt 8, min==max), WB 5000K (opt 12). Prereqs included:
+        Control Mode=Pro (175=1), Anti-Flicker 60Hz (134=2). No dedicated
+        exposure-lock ID exists — shutter+ISO+WB pinned IS the lock.
+        Returns {setting_id: http_status}."""
+        seq = [(175, 1), (134, 2), (145, shutter_opt),
+               (102, iso_opt), (13, iso_opt), (115, wb_opt)]
+        out = {}
+        for sid, opt in seq:
+            out[sid] = self.set_setting(sid, opt).status_code
+            time.sleep(0.8)
+        return out
+
     # -- media ---------------------------------------------------------------
     def media_list(self) -> dict:
         return self.get("/gopro/media/list").json()

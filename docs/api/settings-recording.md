@@ -65,3 +65,20 @@ GET /gopro/camera/setting?setting={SETTING_ID}&option={OPTION_ID}
   все ID, имена и enum-опции извлечены из путей `/gopro/camera/setting?setting=*`; принадлежность
   HERO13 — по camera-badge в описании каждой опции.
 - `docs/specs/spec-api.md` — контекст рига (2026-07-12).
+
+## Protune-локи (НЕдокументированные, но рабочие ID — проверено на HERO13, issue #903)
+
+Официальная спека Open GoPro 2.0 Protune НЕ содержит (заблокировано «по нетехническим причинам», issue #561), но прошивка принимает через тот же `GET /gopro/camera/setting?setting={ID}&option={OPT}`:
+
+| Настройка | ID | Опции (ключевые) |
+|---|---|---|
+| Video Shutter | **145** | 0=Auto, 8=1/60, 13=1/120, 18=1/240, **22=1/480**, 23=1/960 (NTSC 60fps ряд) |
+| Video ISO Min | **102** | 8=100, 7=200, 2=400, 4=800, 1=1600, 3=3200, 0=6400, 9=Auto |
+| Video ISO Max | **13** | те же опции |
+| White Balance | **115** | 0=Auto, 12=5000K, 2=5500K, 4=Native |
+| EV Comp | **118** | 4=0.0 (работает только при Shutter=Auto) |
+| Color/Sharpness | 116/117 | 2=Natural / 1=Medium |
+
+Зависимости: Control Mode=Pro (setting **175**=1) обязателен; Anti-Flicker=60Hz (setting **134**=2) для NTSC-ряда выдержек; shutter кратен fps (при 60fps: 1/60..1/960). Exposure Lock как отдельного ID НЕТ — лок = 145 + (102==13) + 115.
+Трюк снятия карты опций с живой камеры: послать `option=999999` → 403 с JSON списком supported options.
+Источники: gopro/OpenGoPro#561, #903; GoEasyPro settings-DB (HERO5-13). Копии в scratchpad/gopro/.
