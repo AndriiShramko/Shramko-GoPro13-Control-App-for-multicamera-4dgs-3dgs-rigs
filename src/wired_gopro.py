@@ -126,13 +126,19 @@ class WiredGoPro:
         return resp
 
     def start_keep_alive(self):
+        # DEDICATED session: sharing self.session with the main thread corrupts
+        # concurrent downloads (requests.Session is NOT thread-safe) -> silently
+        # truncated media (found 2026-07-12: 4K60 clip arriving 1.7MB vs 37MB).
+        ka_session = requests.Session()
+
         def loop():
             while not self._keep_alive_stop.wait(KEEP_ALIVE_PERIOD_S):
                 try:
-                    self.get("/gopro/camera/keep_alive")
+                    ka_session.get(f"{self.base}/gopro/camera/keep_alive", timeout=4)
                 except requests.RequestException:
-                    pass  # logged already; next tick retries
+                    pass  # next tick retries
 
+        self._keep_alive_stop.clear()
         self._keep_alive_thread = threading.Thread(target=loop, daemon=True)
         self._keep_alive_thread.start()
 
@@ -155,13 +161,24 @@ class WiredGoPro:
             "battery_pct": st.get(STATUS_INTERNAL_BATTERY_PERCENT),
         }
 
+    def wait_idle(self, timeout: float = 30.0) -> bool:
+        """Wait for busy AND encoding flags to clear (camera finalizes clips
+        after stop; media_list returns 'Camera is busy' until then)."""
+        t0 = time.perf_counter()
+        while time.perf_counter() - t0 < timeout:
+            f = self.flags()
+            if not f["busy"] and not f["encoding"]:
+                return True
+            time.sleep(0.3)
+        return False
+
     def require_cool_and_idle(self):
         f = self.flags()
         if f["hot"]:
             raise RuntimeError(f"camera reports System Hot: {f}")
         if f["busy"] or f["encoding"]:
-            raise RuntimeError(f"camera busy/encoding: {f}")
-        return f
+            self.wait_idle(10)
+        return self.flags()
 
     # -- recording -----------------------------------------------------------
     def shutter_start(self):

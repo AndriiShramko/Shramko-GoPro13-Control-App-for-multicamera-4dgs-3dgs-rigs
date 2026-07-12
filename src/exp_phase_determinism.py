@@ -110,18 +110,15 @@ def main():
     for i in range(args.takes):
         if args.tag.startswith("E10"):
             input(f"[E10] выключи+включи камеру, нажми Enter для дубля {i}...")  # оператор
-        cam.require_cool_and_idle()
+        cam.wait_idle()
         t_cmd = time.perf_counter_ns()
         cam.shutter_start()
         time.sleep(args.seconds)
         cam.shutter_stop()
-        for _ in range(40):
-            if not cam.flags()["encoding"]:
-                break
-            time.sleep(0.25)
+        cam.wait_idle()
         last = cam.last_captured()
         dest = take_dir / f"t{i:02d}_{last['file']}"
-        cam.download(last["folder"], last["file"], dest)
+        cam.download(last["folder"], last["file"], dest)  # verifies size + retries
         cam.delete_file(last["folder"], last["file"])
         rows.append({"take": i, "t_cmd_ns": t_cmd, "file": dest.name})
         print(f"take {i}: {dest.name}")
