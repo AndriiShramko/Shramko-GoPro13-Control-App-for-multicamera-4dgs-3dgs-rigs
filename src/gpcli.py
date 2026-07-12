@@ -144,6 +144,39 @@ def cmd_meta(args):
     print(f"full ffprobe -> {out}")
 
 
+def cmd_clock_rtt(args):
+    """E5: N set/read clock cycles over USB — RTT stats (second granularity noted)."""
+    import statistics
+    cam = get_camera()
+    cam.start_keep_alive()
+    rows = []
+    tz_min = int(dt.datetime.now().astimezone().utcoffset().total_seconds() // 60)
+    for i in range(args.n):
+        now = dt.datetime.now()
+        t0 = time.perf_counter_ns()
+        r_set = cam.get(f"/gopro/camera/set_date_time?date={now:%Y_%m_%d}"
+                        f"&time={now:%H_%M_%S}&tzone={tz_min}&dst=0")
+        t1 = time.perf_counter_ns()
+        r_get = cam.get("/gopro/camera/get_date_time")
+        t2 = time.perf_counter_ns()
+        rows.append({"i": i, "set_code": r_set.status_code,
+                     "get_code": r_get.status_code,
+                     "set_rtt_ms": (t1 - t0) / 1e6, "get_rtt_ms": (t2 - t1) / 1e6,
+                     "get_body": r_get.text[:120]})
+        time.sleep(0.5)
+    out = (REPO / "docs" / "experiments" / "exp05-clock" /
+           f"clock-rtt-{dt.datetime.now():%Y%m%d_%H%M%S}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    set_rtts = [r["set_rtt_ms"] for r in rows]
+    summary = {"n": len(rows), "set_rtt_mean_ms": statistics.mean(set_rtts),
+               "set_rtt_stdev_ms": statistics.stdev(set_rtts),
+               "set_rtt_min_ms": min(set_rtts), "set_rtt_max_ms": max(set_rtts),
+               "note": "set_date_time granularity is 1 s — coarse checks only"}
+    out.write_text(json.dumps({"summary": summary, "rows": rows}, indent=2),
+                   encoding="utf-8")
+    print(json.dumps(summary, indent=2)); print(f"-> {out}")
+
+
 def cmd_sd_inventory(_args):
     cam = get_camera()
     listing = cam.media_list()
@@ -171,6 +204,8 @@ def main():
     p = sub.add_parser("meta"); p.add_argument("file")
     p.set_defaults(fn=cmd_meta)
     sub.add_parser("sd-inventory").set_defaults(fn=cmd_sd_inventory)
+    p = sub.add_parser("clock-rtt"); p.add_argument("--n", type=int, default=20)
+    p.set_defaults(fn=cmd_clock_rtt)
     args = ap.parse_args()
     args.fn(args)
 
