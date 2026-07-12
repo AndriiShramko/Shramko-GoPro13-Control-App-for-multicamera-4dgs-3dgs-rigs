@@ -100,10 +100,36 @@ def main():
     cam.enable_wired_control()
     cam.start_keep_alive()
 
+    # MODE ENFORCEMENT — никогда не полагаться на текущее состояние камеры
+    # (урок 2026-07-12: E9 ушёл на 5.3K@120, т.к. диагностика сбросила пресет).
+    # Порядок обязателен: группа видео -> разрешение -> fps (fps зависит от res).
+    WANT = {"2": 108, "234": 5, "3": 5}
+    cam.get("/gopro/camera/presets/set_group?id=1000", timeout=12)
+    time.sleep(2)
+    # обязательно preset 0 (Standard): в чужом пресете (напр. Slo-Mo id=1)
+    # video-настройки отвечают 403
+    cam.get("/gopro/camera/presets/load?id=0", timeout=12)
+    time.sleep(2)
+    for attempt in range(3):
+        for sid, opt in WANT.items():
+            r = cam.set_setting(int(sid), opt)
+            print(f"  set {sid}={opt}: http {r.status_code}")
+            time.sleep(1.2)
+        st = cam.state()["settings"]
+        got = {k: st.get(k) for k in WANT}
+        if got == WANT:
+            break
+        print(f"  verify attempt {attempt}: camera reports {got}, retrying")
+        time.sleep(2)
+    if got != WANT:
+        sys.exit(f"MODE VERIFY FAILED: want {WANT}, camera reports {got} — abort")
+    print(f"mode verified: 4K 8:7 @60 {got}")
+
     take_dir = REPO / "captures" / f"{dt.datetime.now():%Y%m%d_%H%M%S}_{args.tag}"
     take_dir.mkdir(parents=True)
     (take_dir / "meta.json").write_text(json.dumps(
         {"tag": args.tag, "info": cam.info(), "state": cam.state(),
+         "mode_verified": got,
          "stand_log": str(stand_log), "fps": args.fps}, indent=2), encoding="utf-8")
 
     rows = []
@@ -129,6 +155,17 @@ def main():
     period_ns = 1e9 / args.fps
     results = []
     for r in rows:
+        # fps берём из САМОГО клипа — не из предположения (урок: E9 на 120fps)
+        cap = cv2.VideoCapture(str(take_dir / r["file"]))
+        clip_fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        r["clip_fps"] = round(clip_fps, 3)
+        if abs(clip_fps - args.fps) > 0.5:
+            r["phase_ms"] = None
+            r["error"] = f"clip fps {clip_fps:.2f} != expected {args.fps:.2f}"
+            results.append(r)
+            print(f"  take {r['take']}: FPS MISMATCH {clip_fps:.2f} — invalid")
+            continue
         xs, ys = take_pairs(take_dir / r["file"], idx2ns)
         if len(xs) < 30:
             r["phase_ms"] = None

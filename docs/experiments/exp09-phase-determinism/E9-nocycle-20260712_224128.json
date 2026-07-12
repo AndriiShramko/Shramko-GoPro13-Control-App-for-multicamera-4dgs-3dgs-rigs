@@ -1,0 +1,134 @@
+{
+  "summary": {
+    "tag": "E9-nocycle",
+    "period_ms": 16.683333333333334,
+    "n_measured": 10,
+    "phase_circular_stdev_ms": 3.3450193435245916,
+    "phase_values_ms": [
+      0.48,
+      2.71,
+      7.06,
+      7.96,
+      16.63,
+      5.5,
+      7.99,
+      10.25,
+      6.23,
+      6.43
+    ],
+    "verdict": "ПЛАВАЕТ (фаза случайна между дублями)",
+    "note": "circ_std << period/sqrt(12)=4.8ms -> deterministic; ~4.8ms -> random uniform"
+  },
+  "takes": [
+    {
+      "take": 0,
+      "t_cmd_ns": 558429908918700,
+      "file": "t00_GX015648.MP4",
+      "intercept_host_ns": 558430206143884.3,
+      "phase_ns": 477217.6250509694,
+      "phase_ms": 0.47721762505096943,
+      "resid_rms_ms": 8.206900316983443,
+      "n": 64,
+      "start_latency_ms": 297.2251843125
+    },
+    {
+      "take": 1,
+      "t_cmd_ns": 558442479090700,
+      "file": "t01_GX015649.MP4",
+      "intercept_host_ns": 558442754245232.3,
+      "phase_ns": 2711898.958383836,
+      "phase_ms": 2.711898958383836,
+      "resid_rms_ms": 8.587229701405056,
+      "n": 109,
+      "start_latency_ms": 275.1545323125
+    },
+    {
+      "take": 2,
+      "t_cmd_ns": 558455060728200,
+      "file": "t02_GX015650.MP4",
+      "intercept_host_ns": 558455337826588.9,
+      "phase_ns": 7059922.187550034,
+      "phase_ms": 7.059922187550034,
+      "resid_rms_ms": 8.700579425682234,
+      "n": 98,
+      "start_latency_ms": 277.098388875
+    },
+    {
+      "take": 3,
+      "t_cmd_ns": 558468116749800,
+      "file": "t03_GX015651.MP4",
+      "intercept_host_ns": 558468401778821.5,
+      "phase_ns": 7962154.812549548,
+      "phase_ms": 7.9621548125495485,
+      "resid_rms_ms": 8.560006571758345,
+      "n": 75,
+      "start_latency_ms": 285.0290215
+    },
+    {
+      "take": 4,
+      "t_cmd_ns": 558480584898800,
+      "file": "t04_GX015652.MP4",
+      "intercept_host_ns": 558480889579310.06,
+      "phase_ns": 16629310.04171575,
+      "phase_ms": 16.62931004171575,
+      "resid_rms_ms": 8.72917612740546,
+      "n": 82,
+      "start_latency_ms": 304.6805100625
+    },
+    {
+      "take": 5,
+      "t_cmd_ns": 558493088096700,
+      "file": "t05_GX015653.MP4",
+      "intercept_host_ns": 558493340895822.6,
+      "phase_ns": 5495822.604215287,
+      "phase_ms": 5.495822604215286,
+      "resid_rms_ms": 8.487203562333734,
+      "n": 95,
+      "start_latency_ms": 252.799122625
+    },
+    {
+      "take": 6,
+      "t_cmd_ns": 558505585478300,
+      "file": "t06_GX015654.MP4",
+      "intercept_host_ns": 558505872572325.2,
+      "phase_ns": 7988991.833381487,
+      "phase_ms": 7.988991833381487,
+      "resid_rms_ms": 8.478791365906464,
+      "n": 78,
+      "start_latency_ms": 287.0940251875
+    },
+    {
+      "take": 7,
+      "t_cmd_ns": 558518094328400,
+      "file": "t07_GX015655.MP4",
+      "intercept_host_ns": 558518353964017.25,
+      "phase_ns": 10247350.56254769,
+      "phase_ms": 10.24735056254769,
+      "resid_rms_ms": 7.702018404964918,
+      "n": 84,
+      "start_latency_ms": 259.63561725
+    },
+    {
+      "take": 8,
+      "t_cmd_ns": 558530594240100,
+      "file": "t08_GX015656.MP4",
+      "intercept_host_ns": 558530845768071.7,
+      "phase_ns": 6234738.333380558,
+      "phase_ms": 6.234738333380558,
+      "resid_rms_ms": 6.664513287576387,
+      "n": 56,
+      "start_latency_ms": 251.5279716875
+    },
+    {
+      "take": 9,
+      "t_cmd_ns": 558543049867300,
+      "file": "t09_GX015657.MP4",
+      "intercept_host_ns": 558543308411554.7,
+      "phase_ns": 6428221.333380094,
+      "phase_ms": 6.428221333380094,
+      "resid_rms_ms": 8.572518852695044,
+      "n": 83,
+      "start_latency_ms": 258.5442546875
+    }
+  ]
+}
