@@ -1,0 +1,89 @@
+{
+  "summary": {
+    "tag": "E9-nocycle",
+    "period_ms": 16.683333333333334,
+    "n_measured": 0
+  },
+  "takes": [
+    {
+      "take": 0,
+      "t_cmd_ns": 561957159252900,
+      "file": "t00_GX015658.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 7
+    },
+    {
+      "take": 1,
+      "t_cmd_ns": 561964958900200,
+      "file": "t01_GX015659.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 6
+    },
+    {
+      "take": 2,
+      "t_cmd_ns": 561972861957900,
+      "file": "t02_GX015660.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 8
+    },
+    {
+      "take": 3,
+      "t_cmd_ns": 561980622366800,
+      "file": "t03_GX015661.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 9
+    },
+    {
+      "take": 4,
+      "t_cmd_ns": 561988449541700,
+      "file": "t04_GX015662.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 12
+    },
+    {
+      "take": 5,
+      "t_cmd_ns": 561996554596900,
+      "file": "t05_GX015663.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 4
+    },
+    {
+      "take": 6,
+      "t_cmd_ns": 562004139484200,
+      "file": "t06_GX015664.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 5
+    },
+    {
+      "take": 7,
+      "t_cmd_ns": 562011859450700,
+      "file": "t07_GX015665.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 11
+    },
+    {
+      "take": 8,
+      "t_cmd_ns": 562019660858200,
+      "file": "t08_GX015666.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    },
+    {
+      "take": 9,
+      "t_cmd_ns": 562027430889100,
+      "file": "t09_GX015667.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 9
+    }
+  ]
+}

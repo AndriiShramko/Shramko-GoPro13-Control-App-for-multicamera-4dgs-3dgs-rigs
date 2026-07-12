@@ -1,0 +1,117 @@
+{
+  "summary": {
+    "tag": "E9-nocycle",
+    "period_ms": 16.683333333333334,
+    "n_measured": 2
+  },
+  "takes": [
+    {
+      "take": 0,
+      "t_cmd_ns": 562310830706300,
+      "t_enc_ns": 562313914414300,
+      "enc_delay_ms": 3083.708,
+      "file": "t00_GX015671.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    },
+    {
+      "take": 1,
+      "t_cmd_ns": 562322465192400,
+      "t_enc_ns": 562325548240300,
+      "enc_delay_ms": 3083.0479,
+      "file": "t01_GX015672.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 29
+    },
+    {
+      "take": 2,
+      "t_cmd_ns": 562334361654100,
+      "t_enc_ns": 562337495136700,
+      "enc_delay_ms": 3133.4826,
+      "file": "t02_GX015673.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 24
+    },
+    {
+      "take": 3,
+      "t_cmd_ns": 562345881824900,
+      "t_enc_ns": 562348947832300,
+      "enc_delay_ms": 3066.0074,
+      "file": "t03_GX015674.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    },
+    {
+      "take": 4,
+      "t_cmd_ns": 562357552317800,
+      "t_enc_ns": 562360653449600,
+      "enc_delay_ms": 3101.1318,
+      "file": "t04_GX015675.MP4",
+      "clip_fps": 59.94,
+      "intercept_host_ns": 562360858818164.7,
+      "phase_ns": 9768164.666571354,
+      "phase_ms": 9.768164666571355,
+      "resid_rms_ms": 4.34984967271936,
+      "n": 34,
+      "start_latency_ms": 3306.5003646875
+    },
+    {
+      "take": 5,
+      "t_cmd_ns": 562369035820500,
+      "t_enc_ns": 562372121873900,
+      "enc_delay_ms": 3086.0534,
+      "file": "t05_GX015676.MP4",
+      "clip_fps": 59.94,
+      "intercept_host_ns": 562372306209324.9,
+      "phase_ns": 12392658.187404262,
+      "phase_ms": 12.392658187404262,
+      "resid_rms_ms": 3.007024219813074,
+      "n": 32,
+      "start_latency_ms": 3270.388824875
+    },
+    {
+      "take": 6,
+      "t_cmd_ns": 562380807533700,
+      "t_enc_ns": 562383837485600,
+      "enc_delay_ms": 3029.9519,
+      "file": "t06_GX015677.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    },
+    {
+      "take": 7,
+      "t_cmd_ns": 562392320576700,
+      "t_enc_ns": 562395384565600,
+      "enc_delay_ms": 3063.9889,
+      "file": "t07_GX015678.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 7
+    },
+    {
+      "take": 8,
+      "t_cmd_ns": 562403912670200,
+      "t_enc_ns": 562407015751400,
+      "enc_delay_ms": 3103.0812,
+      "file": "t08_GX015679.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    },
+    {
+      "take": 9,
+      "t_cmd_ns": 562415510910700,
+      "t_enc_ns": 562418583621900,
+      "enc_delay_ms": 3072.7112,
+      "file": "t09_GX015680.MP4",
+      "clip_fps": 59.94,
+      "phase_ms": null,
+      "n": 0
+    }
+  ]
+}
