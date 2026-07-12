@@ -9,3 +9,4 @@ bin/
 .venv/
 __pycache__/
 *.pyc
+.githooks/

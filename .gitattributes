@@ -1,0 +1,4 @@
+*.py text eol=lf
+*.csv text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
