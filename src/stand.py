@@ -31,17 +31,13 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+import sys as _sys
+_sys.path.insert(0, str(REPO / "src"))
 
-GRAY_BITS = 24
-SYNC_PATTERN = [1, 0, 1, 1, 0, 0, 1, 0]   # leading anchor: locate+threshold+orientation
-SYNC_TRAIL = [0, 1, 0, 0, 1, 1, 0, 1]     # trailing anchor (complement) pins cell size
+from decode_stand import encode_cells, N_CELLS  # shared encoding
 
 ES_CONTINUOUS = 0x80000000
 ES_DISPLAY_REQUIRED = 0x00000002
-
-
-def to_gray(n: int) -> int:
-    return n ^ (n >> 1)
 
 
 def keep_display_awake():
@@ -63,10 +59,11 @@ class StandRenderer:
         self.x0 = (self.w - zone_w) // 2
         self.y0 = (self.h - zone_h) // 2
         self.zone_w, self.zone_h = zone_w, zone_h
-        n_cells = GRAY_BITS + len(SYNC_PATTERN) + len(SYNC_TRAIL)
-        self.cell = max(8, zone_w // n_cells)
-        self.strip_y = self.y0 + int(zone_h * 0.15)
-        self.bar_y = self.y0 + int(zone_h * 0.55)
+        self.cell = max(8, zone_w // N_CELLS)
+        # strip sits at 55% height: cameras near the desk see the LOWER part of
+        # the panel first (framing probe 2026-07-12 — top of screen got clipped)
+        self.strip_y = self.y0 + int(zone_h * 0.55)
+        self.bar_y = self.y0 + int(zone_h * 0.75)
         self.bar_h = max(10, zone_h // 20)
 
     def draw(self, surf, frame_idx: int, flash: bool, font=None, extra_text: str = ""):
@@ -77,21 +74,20 @@ class StandRenderer:
             return
         surf.fill((0, 0, 0))
         # sync pattern then Gray-coded frame index, MSB first
-        gray = to_gray(frame_idx & ((1 << GRAY_BITS) - 1))
-        bits = (SYNC_PATTERN
-                + [(gray >> (GRAY_BITS - 1 - i)) & 1 for i in range(GRAY_BITS)]
-                + SYNC_TRAIL)
+        bits = encode_cells(frame_idx)
         for i, b in enumerate(bits):
             color = (255, 255, 255) if b else (30, 30, 30)
             x = self.x0 + i * self.cell
-            pygame.draw.rect(surf, color, (x, self.strip_y, self.cell - 2, self.cell))
+            # 2x-tall cells: curved panels + wide lens bow the strip by ~a cell
+            pygame.draw.rect(surf, color,
+                             (x, self.strip_y, self.cell - 2, self.cell * 2))
         # moving bar (position = sub-second phase at 1 px/frame wrap)
         bar_x = self.x0 + (frame_idx * 7) % max(1, self.zone_w - 40)
         pygame.draw.rect(surf, (255, 255, 255), (bar_x, self.bar_y, 40, self.bar_h))
         if font is not None:
             txt = f"{frame_idx}  {extra_text}"
             surf.blit(font.render(txt, True, (200, 200, 200)),
-                      (self.x0, self.strip_y + self.cell + 20))
+                      (self.x0, self.strip_y + self.cell * 2 + 24))
 
 
 def run_display(mode: str, minutes: float, flash_period_s: float):
@@ -99,7 +95,9 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
 
     keep_display_awake()
     pygame.init()
-    surf = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    surf = pygame.display.set_mode((0, 0),
+                                   pygame.FULLSCREEN | pygame.DOUBLEBUF,
+                                   vsync=1)
     font = pygame.font.SysFont("consolas", 48)
     renderer = StandRenderer(surf.get_size())
     log = (REPO / "docs" / "session-logs" /
