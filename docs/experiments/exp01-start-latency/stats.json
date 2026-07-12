@@ -1,0 +1,8 @@
+{
+  "n": 30,
+  "mean_ms": 372.67147666666665,
+  "stdev_ms": 17.861023360199006,
+  "min_ms": 329.8529,
+  "max_ms": 412.6944,
+  "note": "RELATIVE offsets (contain constant display latency); jitter (stdev/min-max spread) is the deliverable"
+}
