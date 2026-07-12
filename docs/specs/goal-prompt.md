@@ -26,11 +26,11 @@ MISSION: фундамент синхронизации ~100 GoPro HERO13 по US
 - Все DONE выполнимы на СТОКОВОЙ прошивке. GoPro Labs = опция: подготовь оператору кейс; флешить только после его «да» и в конце фазы.
 - Измерения ОТНОСИТЕЛЬНЫЕ (джиттер/дельты), не абсолютные: DWM/WASAPI-латентности неизвестны; эталон одновременности — физическое событие, не «бип+вспышка экрана». HyperSmooth OFF. Экранная вспышка НЕ меряет T_readout (LCD) — честный descope, LED/Arduino → shopping-list Ф1.
 - Эталон времени = QPC хоста; счётчик на экране машиночитаемый (Gray/бинарные блоки + цифры для человека), декодер валидируй на эталонном клипе; w32tm при тестах off/лог.
-- ffmpeg: static build → C:\dev\gopro-sync\bin\ffmpeg.exe, вызов ТОЛЬКО по абсолютному пути (в System32 лежит 0-байтная пустышка!), smoke: -version + декод клипа.
+- ffmpeg: static build → E:\dev\gopro-sync\bin\ffmpeg.exe, вызов ТОЛЬКО по абсолютному пути (в System32 лежит 0-байтная пустышка!), smoke: -version + декод клипа.
 - Камера ОДНА: тепло-гейты (флаг Hot → пауза; дрейф-тест на 1080p30; cooldown 10-15 мин), power-state лог перед тестом; умершую камеру по USB не включить — стоп до оператора.
 - SD: инвентарь (media/list) до чистки; удалять только после download+checksum.
 
-OPS: код C:\dev\gopro-sync\ = клон github.com/AndriiShramko/Shramko-GoPro13-Control-App-for-multicamera-4dgs-3dgs-rigs, ветка research/usb-sync-experiments; pre-push hook от main поставить ЛОКАЛЬНО (hooks не клонируются!) и проверить; captures/ и *.MP4 вне git.
+OPS: код E:\dev\gopro-sync\ = клон github.com/AndriiShramko/Shramko-GoPro13-Control-App-for-multicamera-4dgs-3dgs-rigs, ветка research/usb-sync-experiments; pre-push hook от main поставить ЛОКАЛЬНО (hooks не клонируются!) и проверить; captures/ и *.MP4 вне git.
 
 DONE (полные формулировки — spec.md; каждый пункт = факт и засчитывается ТОЛЬКО если tools/verify_phase0.py пересчитывает статистики из сырых MP4 в captures/ и проходит): 1 E0-гейт; 2 docs/api/ база+INDEX+аудит старого репо; 3 CLI discover/record×10/download/meta — логи реальных прогонов; 4 GPMF-пайплайн smoke + STMP-семантика прибита экспериментом; 5 джиттер старта N≥30 (CSV+гистограмма+mean/σ); 6 дрейф ≥20 мин (ppm+CI, без Hot-инцидентов); 7 scanout/response монитора охарактеризованы @240fps; 8 стабильность аудиоканала (20 клапов за 1 визит); 9 методика (пределы каналов в долях кадра) + протокол Ф1 + gate-пороги Ф0→Ф1; 10 SD-инвентарь снят; 11 Labs-кейс оператору написан; 12 ветка запушена, в main 0 новых коммитов (git log main..HEAD), Obsidian (проект+Daily+AGENT_INDEX+уроки) + отчёт.
 

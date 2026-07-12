@@ -16,7 +16,7 @@ status: active
 | [[spec-api]] | Open GoPro HTTP-over-USB, HERO13 Timecode Sync, GoPro Labs (Precision Time QR, oT, LTC), GPMF (STMP/CORI/SHUT), мульти-USB факты (IP-коллизии ~99% на 100 камерах), всё с URL |
 | [[spec-measure]] | Модель рассинхрона Δt=A+B+Φ+D·t; лестница методов (аудио 0.1–1 мс / счётчик=refresh / LED+rolling-shutter σ 0.3–0.5 мс = путь к 1/100 кадра); достижимость целей; prior art (Šmíd&Matas, RocSync, DyNeRF, Sync-NeRF) |
 | [[spec-experiments]] | E0 connectivity-gate ПЕРВЫМ; два трека (сток = все DONE / Labs = опция); measurement chain (QPC↔счётчик↔кадры↔GPMF); E1–E6; verify-скрипт (анти-фальсификация); gate-пороги Ф0→Ф1; протокол Фазы 1 |
-| [[spec-ops]] | Машина `andri` (Python 3.11.9; ловушка ffmpeg-пустышки в System32 → только абс. путь + smoke); C:\dev\gopro-sync\; ветка + pre-push hook (ставить локально!); SD-инвентарь; тепло-гейты; чек-лист инициализации |
+| [[spec-ops]] | Машина `andri` (Python 3.11.9; ловушка ffmpeg-пустышки в System32 → только абс. путь + smoke); E:\dev\gopro-sync\; ветка + pre-push hook (ставить локально!); SD-инвентарь; тепло-гейты; чек-лист инициализации |
 | [[spec-fable]] | Как построен промт под Fable 5 (актуальные доки Anthropic): цель+ограничения без step-by-step, автономность, evidence-grounded прогресс, анти-паттерны |
 
 ## MISSION

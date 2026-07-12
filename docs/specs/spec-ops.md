@@ -12,11 +12,11 @@ status: active
 ## Машина (проверено)
 
 - Python **3.11.9** (`python`/`py`) — идеален для open-gopro (≥3.11 <3.14). git 2.49.0. winget есть. `C:\dev\` существует.
-- **⚠️ ЛОВУШКА ffmpeg**: ffmpeg НЕ установлен, но в `C:\Windows\System32\` лежит ПУСТОЙ файл `ffmpeg` (0 байт, без расширения). Git Bash молча «выполняет» его с exit 0 = тихий ложный успех. Правила (red-team #14): (1) static build (gyan.dev) → `C:\dev\gopro-sync\bin\ffmpeg.exe`/`ffprobe.exe`, путь в конфиге проекта; (2) вызывать ТОЛЬКО по абсолютному пути; (3) smoke-тест: `-version` возвращает строку версии И декод тестового клипа — «exit 0 без вывода» = провал; (4) удаление пустышки = admin/System32 → только оффер оператору.
+- **⚠️ ЛОВУШКА ffmpeg**: ffmpeg НЕ установлен, но в `C:\Windows\System32\` лежит ПУСТОЙ файл `ffmpeg` (0 байт, без расширения). Git Bash молча «выполняет» его с exit 0 = тихий ложный успех. Правила (red-team #14): (1) static build (gyan.dev) → `E:\dev\gopro-sync\bin\ffmpeg.exe`/`ffprobe.exe`, путь в конфиге проекта; (2) вызывать ТОЛЬКО по абсолютному пути; (3) smoke-тест: `-version` возвращает строку версии И декод тестового клипа — «exit 0 без вывода» = провал; (4) удаление пустышки = admin/System32 → только оффер оператору.
 
 ## Рабочая среда
 
-- Код: **`C:\dev\gopro-sync\`** = клон репо `Shramko-GoPro13-Control-App-for-multicamera-4dgs-3dgs-rigs`. НЕ `C:\Users\andri\projects\` (ломает сборки — урок машины). Сразу `git config core.longpaths true`.
+- Код: **`E:\dev\gopro-sync\`** = клон репо `Shramko-GoPro13-Control-App-for-multicamera-4dgs-3dgs-rigs`. НЕ `C:\Users\andri\projects\` (ломает сборки — урок машины). Сразу `git config core.longpaths true`.
 - venv: `py -3.11 -m venv .venv`. Зависимости (пиновать `pip freeze`): open-gopro, requests, numpy, scipy, pandas, matplotlib, opencv-python, pygame, sounddevice. БЕЗ ffmpeg-python (subprocess + `ffprobe.exe -print_format json`).
 - Кодировки: `PYTHONIOENCODING=utf-8` при запуске; .ps1 — ASCII/UTF-8-BOM (уроки машины).
 - USB-канал: камера в режиме **GoPro Connect** (не MTP — если в проводнике диск, управления нет); `ipconfig` → адаптер `172.2*`, IP камеры = gateway `.51`; `ping` → `curl.exe http://<ip>:8080/gopro/camera/info`. Драйвер NCM при нужде — ставить можно, с логом и уведомлением оператора. Только data-кабель, порт в мать (не хаб).
