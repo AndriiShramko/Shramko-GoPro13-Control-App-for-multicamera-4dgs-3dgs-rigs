@@ -51,22 +51,32 @@ class CallLog:
 
 
 def discover_camera_ips() -> list[str]:
-    """Find candidate GoPro IPs: default gateways of adapters in 172.16-31/12
-    whose gateway ends in .51 (GoPro's fixed self-address over USB NCM)."""
+    """Find GoPro IPs over USB NCM. Two clues, verified by a live HTTP probe:
+    (a) adapter default gateway ending .51 (GoPro's fixed self-address), and
+    (b) — Windows often omits the gateway for NCM — any host adapter address in
+    172.16-31/12: the camera then sits at x.y.z.51 of the same subnet."""
     out = subprocess.run(
         ["ipconfig", "/all"], capture_output=True, text=True, check=True
     ).stdout
-    blocks = re.split(r"\r?\n(?=\S)", out)
-    ips: list[str] = []
-    for block in blocks:
-        gw = re.search(r"Default Gateway[ .:]*(\d+\.\d+\.\d+\.\d+)", block)
-        if not gw:
+    candidates: list[str] = []
+    for m in re.finditer(r"(Default Gateway|IPv4 Address)[ .:]*(\d+\.\d+\.\d+\.\d+)", out):
+        ip = m.group(2)
+        parts = ip.split(".")
+        first, second = int(parts[0]), int(parts[1])
+        if not (first == 172 and 16 <= second <= 31):
             continue
-        ip = gw.group(1)
-        first, second = (int(x) for x in ip.split(".")[:2])
-        if first == 172 and 16 <= second <= 31 and ip.endswith(".51"):
-            ips.append(ip)
-    return ips
+        cand = ip if ip.endswith(".51") else ".".join(parts[:3]) + ".51"
+        if cand not in candidates:
+            candidates.append(cand)
+    verified = []
+    for cand in candidates:
+        try:
+            r = requests.get(f"http://{cand}:8080/gopro/camera/info", timeout=2)
+            if r.status_code == 200 and "model_name" in r.text:
+                verified.append(cand)
+        except requests.RequestException:
+            continue
+    return verified
 
 
 class WiredGoPro:

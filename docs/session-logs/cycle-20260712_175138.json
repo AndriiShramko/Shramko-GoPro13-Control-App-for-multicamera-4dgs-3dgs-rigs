@@ -1,0 +1,102 @@
+[
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541462526573200,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015567.MP4"
+    },
+    "cycle": 0
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541473292725600,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015568.MP4"
+    },
+    "cycle": 1
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541484182048300,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015569.MP4"
+    },
+    "cycle": 2
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541495171160000,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015570.MP4"
+    },
+    "cycle": 3
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541505773518100,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015571.MP4"
+    },
+    "cycle": 4
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541516398839200,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015572.MP4"
+    },
+    "cycle": 5
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541527043011100,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015573.MP4"
+    },
+    "cycle": 6
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541537747216600,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015574.MP4"
+    },
+    "cycle": 7
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541548534675900,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015575.MP4"
+    },
+    "cycle": 8
+  },
+  {
+    "start_code": 200,
+    "stop_code": 200,
+    "t_start_perf_ns": 541559179732500,
+    "last_captured": {
+      "folder": "100GOPRO",
+      "file": "GX015576.MP4"
+    },
+    "cycle": 9
+  }
+]
