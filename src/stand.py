@@ -164,6 +164,14 @@ def validate_pacing(intervals_ms: list[float], period_ms: float) -> dict:
 
 
 def run_display(mode: str, minutes: float, flash_period_s: float):
+    import os
+
+    # SDL minimizes exclusive fullscreen on ANY focus loss: the moment the
+    # operator clicks anywhere the stand vanishes and the camera records his
+    # windows (night runs worked only because nobody touched the mouse —
+    # burned 2026-07-13). Borderless TOPMOST window instead + minimize ban.
+    os.environ["SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"] = "0"
+    os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
     import pygame
 
     keep_display_awake()
@@ -174,9 +182,25 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
     hz = _current_refresh_hz()
     period_ms = 1000.0 / hz
     pygame.init()
-    surf = pygame.display.set_mode((0, 0),
-                                   pygame.FULLSCREEN | pygame.DOUBLEBUF,
+    info = pygame.display.Info()
+    surf = pygame.display.set_mode((info.current_w, info.current_h),
+                                   pygame.NOFRAME | pygame.DOUBLEBUF,
                                    vsync=1)
+    hwnd = pygame.display.get_wm_info()["window"]
+    HWND_TOPMOST = -1
+    SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW = 0x2, 0x1, 0x40
+    ctypes.windll.user32.SetWindowPos(
+        hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+
+    def keep_on_top():
+        # watchdog: restore if minimized, re-assert topmost (operator's
+        # clicks must not be able to hide the stand)
+        if ctypes.windll.user32.IsIconic(hwnd):
+            ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        ctypes.windll.user32.SetWindowPos(
+            hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
     renderer = StandRenderer(surf.get_size())
     log = (REPO / "docs" / "session-logs" /
            f"stand-{mode}-{dt.datetime.now():%Y%m%d_%H%M%S}.jsonl")
@@ -227,6 +251,7 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
                 fh.write("\n".join(rows_buf) + "\n")
                 fh.flush()
                 rows_buf.clear()
+                keep_on_top()  # anti-hide watchdog, ~every 3s
             frame_idx += 1
     finally:
         pygame.quit()
