@@ -109,13 +109,15 @@ def take_pairs(video: Path, idx2ns: dict, sample_every: int = 2):
         return np.array([]), np.array([])
     fn = np.array([t[0] for t in triples], dtype=float)
     idx = np.array([t[2] for t in triples], dtype=float)
-    # robust line idx(fn): median-of-pairwise-slopes (Theil-Sen light)
+    # robust line idx(fn): median-of-pairwise-slopes (Theil-Sen light).
+    # LAG MUST BE LARGE: on a 30Hz stand a 60fps camera sees each stand frame
+    # twice -> adjacent pairs give slope 0 half the time and the median
+    # collapses (bug found 2026-07-13: 59/69 points wrongly dropped).
     order = np.argsort(fn)
     fn_s, idx_s = fn[order], idx[order]
-    step = max(1, len(fn_s) // 40)
-    slopes = [(idx_s[j] - idx_s[i]) / (fn_s[j] - fn_s[i])
-              for i in range(0, len(fn_s) - step, step)
-              for j in (i + step,) if fn_s[j] != fn_s[i]]
+    lag = max(8, len(fn_s) // 4)
+    slopes = [(idx_s[i + lag] - idx_s[i]) / (fn_s[i + lag] - fn_s[i])
+              for i in range(len(fn_s) - lag) if fn_s[i + lag] != fn_s[i]]
     slope = float(np.median(slopes))
     inter = float(np.median(idx_s - slope * fn_s))
     resid = idx - (slope * fn + inter)
