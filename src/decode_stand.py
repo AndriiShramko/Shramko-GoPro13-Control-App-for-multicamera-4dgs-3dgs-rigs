@@ -206,28 +206,79 @@ def decode_frame_clock(img: np.ndarray, loc: dict | None = None):
     # data row via the proven dense-band locator; clock row lives a fixed
     # offset below it along the same curve (global 2-cluster split drowned in
     # scene clutter: Otsu at 25 admits 100+ stray blobs, 2026-07-13)
-    dloc = find_strip(gray)
-    if dloc is None:
-        return {"flash": 0, "idx": None, "loc": None}
+    return _decode_with_band_retry(gray, bw, loc)
+
+
+def _decode_with_band_retry(gray, bw, loc, max_bands: int = 3):
+    """The operator's browser shows striped content (road zebra!) that wins
+    find_strip's density contest (cell_h 15 vs our ~50, 2026-07-13). Our bar
+    is the only band with a COMPANION row 1.1-2.6 cell_h away — if a band has
+    none, mask it out and search again."""
+    work = gray.copy()
+    for _ in range(max_bands):
+        dloc = find_strip(work)
+        if dloc is None:
+            return {"flash": 0, "idx": None, "loc": None}
+        res = _decode_two_rows(gray, bw, dloc, loc)
+        if res["idx"] is not None:
+            return res
+        # mask this band and retry
+        ycoef = np.array(dloc["ycoef"])
+        h_img, w_img = work.shape
+        xs = np.arange(w_img)
+        cys = np.polyval(ycoef, xs)
+        rad = max(20, int(dloc["cell_h"] * 3.5))
+        for x in range(w_img):
+            y0 = max(0, int(cys[x]) - rad)
+            y1 = min(h_img, int(cys[x]) + rad)
+            work[y0:y1, x] = 0
+    return {"flash": 0, "idx": None, "loc": None}
+
+
+def _decode_two_rows(gray, bw, dloc, loc):
     # find_strip's dense band swallows BOTH rows: its curve runs between them
     # (rows are ~1.2*cell_h apart in-frame). Split blobs by dy sign.
     ycoef_mix = np.array(dloc["ycoef"])
     cell_h = float(dloc["cell_h"])
+    # LOCAL binarization around the band: with the operator's bright browser
+    # on screen the GLOBAL Otsu jumps high and the (dimmer) strip blobs fall
+    # under it entirely (2026-07-13). Threshold only inside the band zone.
+    h_img, w_img = gray.shape
+    xs_all = np.arange(w_img)
+    cys_all = np.polyval(ycoef_mix, xs_all)
+    rad = max(25, int(cell_h * 2.2))  # 4.0 swallowed the white browser above
+    y_lo = max(0, int(cys_all.min()) - rad)
+    y_hi = min(h_img, int(cys_all.max()) + rad)
+    if y_hi - y_lo < 10:
+        return {"flash": 0, "idx": None, "loc": None}
+    zone = gray[y_lo:y_hi, :]
+    _, bw_zone = cv2.threshold(zone, 0, 255,
+                               cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    bw = np.zeros_like(gray)
+    bw[y_lo:y_hi, :] = bw_zone
     n, _, stats, cents = cv2.connectedComponentsWithStats(bw, connectivity=8)
-    upper, lower = [], []   # (cx, cy, w)
+    row0, below, above = [], [], []   # (cx, cy, w)
     for i in range(1, n):
         x, y, w, h, area = stats[i]
         if not (4 <= w <= 260 and 8 <= h <= 140 and area >= 30):
             continue
         cx, cy = float(cents[i][0]), float(cents[i][1])
         dy = (cy - float(np.polyval(ycoef_mix, cx))) / cell_h
-        # find_strip now locks onto ONE row (rows are 1.8*cell_h apart, beyond
-        # its band window): that row sits at dy~0, the other at dy~±1.8.
+        # find_strip locks onto ONE row; companion sits at dy~±1.8. The two
+        # sides are SEPARATE candidates: browser content above the bar floods
+        # the upper window with junk (75 blobs, 2026-07-13) — never merge.
         if -0.6 <= dy <= 0.6:
-            upper.append((cx, cy, float(w)))   # the row find_strip found
-        elif 1.1 <= dy <= 2.6 or -2.6 <= dy <= -1.1:
-            lower.append((cx, cy, float(w)))   # the companion row
-    if len(upper) < 5 or len(lower) < 5:
+            row0.append((cx, cy, float(w)))
+        elif 1.1 <= dy <= 2.6:
+            below.append((cx, cy, float(w)))
+        elif -2.6 <= dy <= -1.1:
+            above.append((cx, cy, float(w)))
+    pairs = []
+    for comp in (below, above):
+        if len(row0) >= 5 and len(comp) >= 5:
+            pairs.append((row0, comp))
+            pairs.append((comp, row0))
+    if not pairs:
         return {"flash": 0, "idx": None, "loc": None}
     # NO heuristics for which row is which: Manchester-with-gaps data is
     # itself near-periodic (pitch 2 cells), so smoothness/markerness metrics
@@ -262,7 +313,7 @@ def decode_frame_clock(img: np.ndarray, loc: dict | None = None):
             out.append(cxs0[j])
         return out
 
-    for data_c, clock_c in ((upper, lower), (lower, upper)):
+    for data_c, clock_c in pairs:
         if len(clock_c) < 15 or len(data_c) < 5:
             continue
         # clock blobs are uniform-width cells; range-normalization amplifies
@@ -277,7 +328,7 @@ def decode_frame_clock(img: np.ndarray, loc: dict | None = None):
         variants = []
         for kadj in (0, 1, -1):
             h = heal(cxs0, kadj)
-            if 25 <= len(h) <= 30 and h not in variants:
+            if 26 <= len(h) <= 29 and h not in variants:
                 variants.append(h)
         if not variants:
             continue

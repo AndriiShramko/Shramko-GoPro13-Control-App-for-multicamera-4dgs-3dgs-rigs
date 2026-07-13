@@ -64,10 +64,16 @@ class StandRenderer:
         strip_w = int(self.w * 0.92)
         self.strip_x0 = (self.w - strip_w) // 2
         self.cell = max(8, strip_w // N_CELLS)
-        # strip at 70% height: daylight glare hits the panel around 45-55%
-        # and fuses data cells with the bright spot in EVERY frame
-        # (2026-07-13); the lower third is dark. Was 55% (framing probe).
-        self.strip_y = self.y0 + int(zone_h * 0.70)
+        if self.h < self.w // 3:
+            # COMPACT bottom-bar mode (2026-07-13): the stand no longer owns
+            # the whole screen — the operator works at this machine and a
+            # fullscreen stand loses the fight for the display. Strip near
+            # the top of the small window, clock row below it.
+            self.strip_y = int(self.cell * 2.5)  # black margin above rows
+        else:
+            # strip at 70% height: daylight glare hits the panel around
+            # 45-55%; the lower third is dark. Was 55% (framing probe).
+            self.strip_y = self.y0 + int(zone_h * 0.70)
         # E7 multi-row mode: same strip at several heights; a camera frame
         # exposed during the monitor's top-to-bottom scanout shows a SEAM
         # (upper rows = index N, lower rows = N-1) — seam position = sub-frame
@@ -171,7 +177,6 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
     # windows (night runs worked only because nobody touched the mouse —
     # burned 2026-07-13). Borderless TOPMOST window instead + minimize ban.
     os.environ["SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"] = "0"
-    os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
     import pygame
 
     keep_display_awake()
@@ -183,7 +188,16 @@ def run_display(mode: str, minutes: float, flash_period_s: float):
     period_ms = 1000.0 / hz
     pygame.init()
     info = pygame.display.Info()
-    surf = pygame.display.set_mode((info.current_w, info.current_h),
+    # COMPACT bottom bar, not fullscreen: the operator works at this machine;
+    # a fullscreen stand loses the display fight (recorded his browser for a
+    # whole E15 run, 2026-07-13). ~7.5 cells tall, pinned to the bottom.
+    bar_h = int((info.current_w * 0.92 / N_CELLS) * 10.5)  # black margins
+    # around the rows: the operator's white browser sits right above the bar
+    # and poisons the local threshold zone (2026-07-13)
+    # 72px above the Windows taskbar: its icons leak into the clock-row
+    # cluster window as junk blobs (grid grew to 29-30 nodes, 2026-07-13)
+    os.environ["SDL_VIDEO_WINDOW_POS"] = f"0,{info.current_h - bar_h - 72}"
+    surf = pygame.display.set_mode((info.current_w, bar_h),
                                    pygame.NOFRAME | pygame.DOUBLEBUF,
                                    vsync=1)
     hwnd = pygame.display.get_wm_info()["window"]
