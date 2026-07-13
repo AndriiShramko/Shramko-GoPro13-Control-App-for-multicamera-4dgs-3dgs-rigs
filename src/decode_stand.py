@@ -30,6 +30,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+DEBUG = {"on": False, "log": []}  # decode_frame_clock failure tracing
+
 GRAY_BITS = 24
 START_MARKER = [1, 1, 1, 0]   # 3-run "violation" — cannot occur inside data
 END_MARKER = [0, 1, 1, 1]
@@ -60,9 +62,12 @@ def from_gray(g: int) -> int:
 
 
 def _downscale(img: np.ndarray) -> np.ndarray:
-    if img.shape[1] > 1400:
-        s = 1280 / img.shape[1]
-        img = cv2.resize(img, (1280, int(img.shape[0] * s)),
+    # 2048 (not 1280): at 1280 a 4K-frame cell is ~16px and the ~1.4px
+    # inter-cell gap fuses under dim locked exposure -> runs merge into
+    # multi-cell blobs and Manchester dies (found 2026-07-13).
+    if img.shape[1] > 2200:
+        s = 2048 / img.shape[1]
+        img = cv2.resize(img, (2048, int(img.shape[0] * s)),
                          interpolation=cv2.INTER_AREA)
     return img
 
@@ -71,8 +76,12 @@ def find_strip(gray_img: np.ndarray):
     """Locate the strip band. Returns loc dict {xa, xb, pitch, ycoef, cell_h}."""
     thr_val, bw = cv2.threshold(gray_img, 0, 255,
                                 cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    if thr_val < 100:  # dark scene: Otsu may split screen glow; clamp up
-        _, bw = cv2.threshold(gray_img, 140, 255, cv2.THRESH_BINARY)
+    # NO upward clamp: with locked exposure (1/240 ISO100) strip cells sit at
+    # brightness 65-92, a forced 140 threshold blanks the strip entirely
+    # (2026-07-13 — exactly the audit's "fixed clamp is brittle" flaw).
+    # Guard only against a near-black empty frame where Otsu splits noise.
+    if thr_val < 12:
+        return None
     n, _, stats, cents = cv2.connectedComponentsWithStats(bw, connectivity=8)
     blobs = []
     for i in range(1, n):
@@ -174,7 +183,198 @@ def _decode_runs(runs: list[tuple[int, float]]):
     return from_gray(g)
 
 
+def decode_frame_clock(img: np.ndarray, loc: dict | None = None):
+    """v6: clock-row grid decode. The stand draws a 1010... clock strip under
+    the data strip; the local cell grid is read from clock blob centers, so
+    arbitrary smooth fisheye stretch (pitch 0.5-1.3x along the strip) is
+    calibrated out per frame. Data cells are then SAMPLED at grid centers —
+    no run-length logic, no uniform-pitch assumption."""
+    img = _downscale(img)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+    if float(gray.mean()) > 200:
+        return {"flash": 1, "idx": None, "loc": loc}
+    # range normalization: OpenCV decodes GoPro HEVC limited-range WITHOUT
+    # expansion (frames come out ~2x darker than ffmpeg's PNG export) and
+    # every fixed threshold slides (2026-07-13). Stretch p99.9 -> 255.
+    hi_p = float(np.percentile(gray, 99.9))
+    if hi_p > 5:
+        gray = cv2.convertScaleAbs(gray, alpha=min(8.0, 250.0 / hi_p))
+    thr_val, bw = cv2.threshold(gray, 0, 255,
+                                cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if thr_val < 12:
+        return {"flash": 0, "idx": None, "loc": None}
+    # data row via the proven dense-band locator; clock row lives a fixed
+    # offset below it along the same curve (global 2-cluster split drowned in
+    # scene clutter: Otsu at 25 admits 100+ stray blobs, 2026-07-13)
+    dloc = find_strip(gray)
+    if dloc is None:
+        return {"flash": 0, "idx": None, "loc": None}
+    # find_strip's dense band swallows BOTH rows: its curve runs between them
+    # (rows are ~1.2*cell_h apart in-frame). Split blobs by dy sign.
+    ycoef_mix = np.array(dloc["ycoef"])
+    cell_h = float(dloc["cell_h"])
+    n, _, stats, cents = cv2.connectedComponentsWithStats(bw, connectivity=8)
+    upper, lower = [], []   # (cx, cy, w)
+    for i in range(1, n):
+        x, y, w, h, area = stats[i]
+        if not (4 <= w <= 260 and 8 <= h <= 140 and area >= 30):
+            continue
+        cx, cy = float(cents[i][0]), float(cents[i][1])
+        dy = (cy - float(np.polyval(ycoef_mix, cx))) / cell_h
+        # find_strip now locks onto ONE row (rows are 1.8*cell_h apart, beyond
+        # its band window): that row sits at dy~0, the other at dy~±1.8.
+        if -0.6 <= dy <= 0.6:
+            upper.append((cx, cy, float(w)))   # the row find_strip found
+        elif 1.1 <= dy <= 2.6 or -2.6 <= dy <= -1.1:
+            lower.append((cx, cy, float(w)))   # the companion row
+    if len(upper) < 5 or len(lower) < 5:
+        return {"flash": 0, "idx": None, "loc": None}
+    # NO heuristics for which row is which: Manchester-with-gaps data is
+    # itself near-periodic (pitch 2 cells), so smoothness/markerness metrics
+    # both misfire. Try BOTH assignments x grid shifts; markers + Manchester
+    # are the validator (2026-07-13).
+    # With drawn gaps every LIT cell is its own blob: bits come from blob
+    # POSITIONS snapped to the clock grid — no intensity sampling, no
+    # polynomial grid (a glare hole made the cubic fit slide off-cell).
+    def heal(cxs0, kadj):
+        """Fill clock holes / drop split-blob junk against the GLOBAL median
+        step M (a running prev_gap cascaded after a midpoint merge and ate
+        the grid down to 2 nodes, 2026-07-13). kadj tweaks the node count in
+        the biggest hole (fisheye stretches it, round() can be off by one)."""
+        gaps = np.diff(cxs0)
+        if len(gaps) < 3:
+            return list(cxs0)
+        M = float(np.median(gaps))
+        if M <= 1:
+            return list(cxs0)
+        big = int(np.argmax(gaps)) + 1
+        out = [cxs0[0]]
+        for j in range(1, len(cxs0)):
+            gap = cxs0[j] - out[-1]
+            k = int(round(gap / M))
+            if j == big and 2 <= k <= 5:
+                k = max(1, k + kadj)
+            if k <= 0:
+                continue  # split half / junk closer than 0.5*M: drop
+            if 2 <= k <= 6:
+                for m in range(1, k):
+                    out.append(out[-1] + gap / k)
+            out.append(cxs0[j])
+        return out
+
+    for data_c, clock_c in ((upper, lower), (lower, upper)):
+        if len(clock_c) < 15 or len(data_c) < 5:
+            continue
+        # clock blobs are uniform-width cells; range-normalization amplifies
+        # noise into small junk blobs that bend heal() (2026-07-13) — drop
+        # anything much narrower than the cluster median
+        cw = sorted(p[2] for p in clock_c)
+        med_w = cw[len(cw) // 2]
+        clock_f = [p for p in clock_c if p[2] >= 0.55 * med_w]
+        if len(clock_f) < 15:
+            continue
+        cxs0 = sorted(p[0] for p in clock_f)
+        variants = []
+        for kadj in (0, 1, -1):
+            h = heal(cxs0, kadj)
+            if 25 <= len(h) <= 30 and h not in variants:
+                variants.append(h)
+        if not variants:
+            continue
+        ycoef_d = np.polyfit([p[0] for p in data_c],
+                             [p[1] for p in data_c], 2)
+        for healed in variants:
+            cxs = np.array(healed, dtype=float)
+            yield_result = yield_from_grid(cxs, gray, ycoef_d, cell_h)
+            if yield_result is not None:
+                return {"flash": 0, "idx": yield_result, "loc": loc}
+    return {"flash": 0, "idx": None, "loc": None}
+
+
+def yield_from_grid(cxs, gray, ycoef_d, cell_h):
+    """Sample DATA-row INTENSITY at clock-grid nodes (piecewise-linear x(pos),
+    edge-extrapolated), try grid shifts; return frame idx or None.
+    Intensity sampling is immune to data-blob splits/merges — only the clock
+    row needs blob integrity, and heal() covers that (2026-07-13)."""
+    h_img, w_img = gray.shape
+    half = max(2, int(cell_h * 0.3))
+    # edge extension: np.interp clamps beyond the last clock blob, data cell
+    # 55 sits right of clock cell 54 (stable '0110' tail before this fix)
+    step_l = cxs[1] - cxs[0]
+    step_r = cxs[-1] - cxs[-2]
+    cxs_ext = np.concatenate(([cxs[0] - step_l], cxs, [cxs[-1] + step_r]))
+    for s in (0, 2, -2, 1, -1, 3, -3, 4, -4):
+        node_pos = np.arange(len(cxs)) * 2.0 + s   # clock cells are even
+        if node_pos[0] < -2 or node_pos[-1] > 58:
+            continue
+        node_ext = np.concatenate(([node_pos[0] - 2], node_pos,
+                                   [node_pos[-1] + 2]))
+        xs56 = np.interp(np.arange(56, dtype=float), node_ext, cxs_ext)
+        if xs56.min() < 2 or xs56.max() > w_img - 3:
+            continue
+        pitch_loc = np.gradient(xs56)
+        vals = np.empty(56, np.float32)
+        ok = True
+        for c in range(56):
+            xc = int(round(xs56[c]))
+            yc = int(round(float(np.polyval(ycoef_d, xs56[c]))))
+            dx = max(1, int(pitch_loc[c] * 0.2))
+            x0, x1 = max(0, xc - dx), min(w_img, xc + dx + 1)
+            y0, y1 = max(0, yc - half), min(h_img, yc + half + 1)
+            if x1 <= x0 or y1 <= y0:
+                ok = False
+                break
+            vals[c] = gray[y0:y1, x0:x1].mean()
+        if not ok:
+            continue
+        lo, hi = float(vals.min()), float(vals.max())
+        if hi - lo < 25:
+            continue
+        # LOCAL threshold: fisheye vignetting dims edge cells (markers!) to
+        # 38-44 vs global mid 46 — the last 5-bit gap to a perfect decode
+        # (2026-07-13). Rolling min/max over ±6 cells adapts the cut.
+        win = 13
+        pad = win // 2
+        vpad = np.pad(vals, pad, mode="edge")
+        view = np.lib.stride_tricks.sliding_window_view(vpad, win)[:56]
+        thr56 = (view.min(axis=1) + view.max(axis=1)) / 2
+        # cells in a locally flat (all-dark/all-lit) stretch: fall back to
+        # global mid so a run of zeros doesn't split on noise
+        flat = (view.max(axis=1) - view.min(axis=1)) < 20
+        thr56[flat] = (lo + hi) / 2
+        bits = (vals > thr56).astype(int).tolist()
+        if DEBUG["on"]:
+            DEBUG["log"].append(
+                f"s={s} n_nodes={len(cxs)} bits={''.join(map(str, bits))}")
+        if (bits[:len(START_MARKER)] != START_MARKER
+                or bits[-len(END_MARKER):] != END_MARKER):
+            continue
+        data = bits[len(START_MARKER):len(START_MARKER) + DATA_CELLS]
+        g = 0
+        bad = False
+        for j in range(0, DATA_CELLS, 2):
+            pair = (data[j], data[j + 1])
+            if pair == (1, 0):
+                g = (g << 1) | 1
+            elif pair == (0, 1):
+                g = g << 1
+            else:
+                bad = True
+                break
+        if bad:
+            continue
+        return from_gray(g)
+    return None
+
+
 def decode_frame(img: np.ndarray, loc: dict | None = None):
+    out = decode_frame_clock(img, loc)
+    if out["idx"] is not None or out["flash"]:
+        return out
+    return _decode_frame_runs(img, loc)
+
+
+def _decode_frame_runs(img: np.ndarray, loc: dict | None = None):
     img = _downscale(img)
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
     if float(gray_img.mean()) > 200:
@@ -184,6 +384,15 @@ def decode_frame(img: np.ndarray, loc: dict | None = None):
         if loc is None:
             return {"flash": 0, "idx": None, "loc": None}
     prof = _profile(gray_img, loc)
+    # Smooth BEFORE thresholding: narrow inter-cell gaps (~2.5px) dip only to
+    # mid-amplitude and sit exactly at the adaptive threshold -> run chatter
+    # (diag 2026-07-13). A Gaussian ~pitch/3 erases gaps and moire while
+    # 26px-wide cells survive untouched.
+    pitch0 = max(6.0, (loc.get("xb", 0) - loc.get("xa", 0)) / (N_CELLS - 1))
+    k = int(pitch0 / 3) | 1
+    if k >= 3:
+        prof = cv2.GaussianBlur(prof.reshape(1, -1).astype(np.float32),
+                                (k, 1), 0).ravel()
     lo = float(np.percentile(prof, 10))
     hi = float(np.percentile(prof, 90))
     if hi - lo < 30:

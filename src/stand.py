@@ -64,9 +64,10 @@ class StandRenderer:
         strip_w = int(self.w * 0.92)
         self.strip_x0 = (self.w - strip_w) // 2
         self.cell = max(8, strip_w // N_CELLS)
-        # strip sits at 55% height: cameras near the desk see the LOWER part of
-        # the panel first (framing probe 2026-07-12 — top of screen got clipped)
-        self.strip_y = self.y0 + int(zone_h * 0.55)
+        # strip at 70% height: daylight glare hits the panel around 45-55%
+        # and fuses data cells with the bright spot in EVERY frame
+        # (2026-07-13); the lower third is dark. Was 55% (framing probe).
+        self.strip_y = self.y0 + int(zone_h * 0.70)
         # E7 multi-row mode: same strip at several heights; a camera frame
         # exposed during the monitor's top-to-bottom scanout shows a SEAM
         # (upper rows = index N, lower rows = N-1) — seam position = sub-frame
@@ -78,12 +79,16 @@ class StandRenderer:
     def _draw_strip(self, surf, bits, y):
         import pygame
 
+        # Gap must survive the camera optics: 2px on screen shrinks to <1px
+        # in-frame and cells fuse (runs of 4.6 cells, Manchester dies —
+        # 2026-07-13). cell//6 keeps ~2.5px in-frame at 2048 decode width.
+        gap = max(4, self.cell // 6)
         for i, b in enumerate(bits):
             color = (255, 255, 255) if b else (30, 30, 30)
             x = self.strip_x0 + i * self.cell
             # 2x-tall cells: GoPro fisheye bows the strip by ~a cell
             pygame.draw.rect(surf, color,
-                             (x, y, self.cell - 2, self.cell * 2))
+                             (x, y, self.cell - gap, self.cell * 2))
 
     def draw(self, surf, frame_idx: int, flash: bool, font=None,
              extra_text: str = "", rows: bool = False):
@@ -94,14 +99,21 @@ class StandRenderer:
             return
         surf.fill((0, 0, 0))
         bits = encode_cells(frame_idx)
+        clock = [1 - (i % 2) for i in range(len(bits))]  # 1010... local grid:
+        # fisheye makes cell pitch vary 0.5-1.3x along the strip; the clock
+        # row lets the decoder read the grid POSITION at every cell instead
+        # of assuming a uniform pitch (2026-07-13)
         if rows:
             for y in self.row_ys:
                 self._draw_strip(surf, bits, y)
         else:
             self._draw_strip(surf, bits, self.strip_y)
-        # moving bar (position = sub-second phase at 1 px/frame wrap)
-        bar_x = self.x0 + (frame_idx * 7) % max(1, self.zone_w - 40)
-        pygame.draw.rect(surf, (255, 255, 255), (bar_x, self.bar_y, 40, self.bar_h))
+            # 3.6*cell row spacing: at 2.6 the data and clock cells fused
+            # vertically through G2G blur (L-shaped blobs fell in the dy gap
+            # between clusters and vanished from both rows, 2026-07-13)
+            self._draw_strip(surf, clock, self.strip_y + int(self.cell * 3.6))
+        # NO moving bar: at strip_y=70% it flew straight through the clock
+        # row (bar_y=75%) leaving moving junk blobs (2026-07-13)
         if font is not None:
             txt = f"{frame_idx}  {extra_text}"
             surf.blit(font.render(txt, True, (200, 200, 200)),
