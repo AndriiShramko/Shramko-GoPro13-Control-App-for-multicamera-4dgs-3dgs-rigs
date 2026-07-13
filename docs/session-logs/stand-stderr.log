@@ -1,0 +1,4 @@
+pygame 2.6.1 (SDL 2.28.4, Python 3.11.9)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+log -> E:\dev\gopro-sync\docs\session-logs\stand-counter-20260713_220544.jsonl
+PACING: {"n": 89838, "median_ms": 33.331, "on_grid": 88267, "skipped_vblank": 5, "chaos": 1566, "chaos_frac": 0.0174, "PACING_GATE": true}
