@@ -1,3 +1,22 @@
+# 🔬 NEW RESEARCH — "Shramko Genlock": software frame-phase sync for GoPro 13/14 *(work in progress)*
+
+> **Status: active research, not a finished product.** Numbers below are preliminary (measured on 1–2 cameras). Full multi-camera verification is the next stage and is not done yet. Everything is honestly flagged as in-progress.
+
+GoPro cameras have **no genlock input** — GoPro dropped hardware shutter-phase locking after the HERO4. So multi-camera 4DGS / volumetric rigs on GoPros never start in sync. I am researching a third path (instead of buying €10k+ global-shutter machine-vision cameras, or eating "±1 frame" desync): a **software calibration** I call **"Shramko Genlock"** — genlock for cameras that have no genlock.
+
+**Core finding (Phase 0, one camera):** a GoPro's frame phase is a *lottery drawn at power-on* (uniformly random over the frame period) that then *holds stable* within one power session. So synchronization can be finished by **rejection sampling** — reboot each camera until its phase lands in a shared target window, then it holds for the shooting block. Landed a ±1 ms window (≈1/17 frame) in 4 restarts; within-take phase stability σ ≈ 0.13 ms; camera phase is readable **live from the preview stream without stopping recording**, so a Raspberry Pi / Jetson can run and monitor the whole calibration automatically. Preliminary measurements put the landed phase in the **same sub-1 ms class as the only public measurement of iPhone 17 Pro genlock (Blackmagic ProDock, "<1 ms")** — but honestly: mine is open-loop (lands once, then drifts), real genlock is closed-loop (holds forever). Rolling-shutter readout still limits fast motion (same as iPhone).
+
+### Stages / roadmap
+- ✅ **Phase 0 — one camera (done):** phase physics (lottery-at-power-on, holds in-session) proven; rejection-sampling calibration proven; preview-phase-during-recording proven; camera-vs-host drift measured (endpoint method, ≈ −37 ppm this session). Optical-timecode measurement stand + full experiment/analysis code.
+- ⏳ **Phase 1 — 2+ cameras (next, needs hardware):** the thing you *cannot* measure on one camera — true **inter-camera phase** and inter-camera drift; controlled power-cycling through a per-port-programmable USB hub; central auto-calibration zone driven by a Pi/Jetson.
+- 🔭 **Phase 2+ — scale:** toward a 100-camera rig; target theoretically down to 1/100 frame (**unverified — needs a built system**); auto-recalibration reporting per camera.
+
+**All research code + honest write-ups live on the [`research/usb-sync-experiments`](https://github.com/AndriiShramko/Shramko-GoPro13-Control-App-for-multicamera-4dgs-3dgs-rigs/tree/research/usb-sync-experiments) branch** (see its `docs/` — `PHASE-VS-GENLOCK.md`, `ROLLING-SHUTTER-CEILING.md`, `DRIFT-HONEST.md`, hardware notes).
+
+**Open source & seeking collaborators.** If you want to build your own synchronized GoPro 4DGS rig, or want to develop this further — get in touch (github.com/AndriiShramko). Support for the next-stage hardware is welcome: paypal.me/AndriiShramko. *To be continued.*
+
+---
+
 Please note that there is no order in this documentation. I made everything for myself. If you want to organize the documentation, you’re more than welcome! :) This app designed and tested only on gopro13
 
 ## Demo Videos
