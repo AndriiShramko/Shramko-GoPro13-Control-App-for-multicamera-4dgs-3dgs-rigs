@@ -65,21 +65,31 @@ def load_stand(log: Path):
             rows.append((r["i"], r["a"]))
     if period_ms is None:
         period_ms = 1000.0 / 30.0  # legacy logs: repaired stand writes it
-    lo, hi = period_ms - 1.5, period_ms + 1.5
-    idx2ns = {}
-    for k in range(1, len(rows) - 1):
-        d_prev = (rows[k][1] - rows[k - 1][1]) / 1e6
-        d_next = (rows[k + 1][1] - rows[k][1]) / 1e6
-        if lo <= d_prev <= hi and lo <= d_next <= hi:
-            idx2ns[rows[k][0]] = rows[k][1]
-    total = max(1, len(rows) - 2)
-    clean_frac = len(idx2ns) / total
-    if clean_frac < 0.4:
+    if len(rows) < 30:
+        raise RuntimeError(f"stand log too short ({log.name})")
+    # VBLANK-GRID SNAP (2026-07-13): only the DwmFlush RETURN jitters under
+    # operator load — the frames themselves sit on the vblank grid. Dropping
+    # jittery frames starved experiments (16 usable of 73 decoded while the
+    # operator worked). Instead: robust-fit the grid t(i)=t0+P*i on clean
+    # frames, then snap EVERY frame to its nearest grid line (k*P handles
+    # genuinely skipped vblanks). Sub-ms times for all frames.
+    ii = np.array([r[0] for r in rows], dtype=float)
+    aa = np.array([r[1] for r in rows], dtype=float)
+    P_ns = period_ms * 1e6
+    # Under load flips SKIP vblanks, so time is NOT linear in frame index —
+    # snap each frame to the global vblank lattice directly. Lattice phase =
+    # circular median of (a mod P); DwmFlush return jitter (±1-3ms) averages
+    # out against P=33ms.
+    ph = np.angle(np.mean(np.exp(1j * (aa % P_ns) / P_ns * 2 * np.pi)))
+    phase_ns = (ph / (2 * np.pi) * P_ns) % P_ns
+    snapped = np.round((aa - phase_ns) / P_ns) * P_ns + phase_ns
+    quality = float(np.mean(np.abs(aa - snapped) < 4e6))
+    if quality < 0.7:
         raise RuntimeError(
-            f"stand log unusable: only {clean_frac:.0%} clean frames ({log.name})")
-    if clean_frac < 0.9:
-        print(f"    stand {log.name}: {clean_frac:.0%} clean frames "
-              f"(load transients filtered per-frame)")
+            f"stand log unusable: grid snap quality {quality:.0%} ({log.name})")
+    if quality < 0.95:
+        print(f"    stand {log.name}: grid-snap quality {quality:.0%}")
+    idx2ns = {int(i): float(s) for i, s in zip(ii, snapped)}
     return idx2ns, wall0, perf0
 
 
@@ -105,6 +115,18 @@ def take_pairs(video: Path, idx2ns: dict, sample_every: int = 2):
                 triples.append((n, pts, out["idx"]))
         n += 1
     cap.release()
+    if len(triples) < 8:
+        return np.array([]), np.array([])
+    # EDGES only: a 60fps camera sees each 30Hz stand frame twice; duplicate
+    # (pts, idx) pairs form a staircase and inflate the fit residual to
+    # P/sqrt(12)~9ms (2026-07-13). The FIRST frame of each idx is the edge.
+    seen = set()
+    edges = []
+    for t in triples:
+        if t[2] not in seen:
+            seen.add(t[2])
+            edges.append(t)
+    triples = edges
     if len(triples) < 8:
         return np.array([]), np.array([])
     fn = np.array([t[0] for t in triples], dtype=float)

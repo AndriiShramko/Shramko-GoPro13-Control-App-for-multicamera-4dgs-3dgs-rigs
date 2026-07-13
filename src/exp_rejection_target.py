@@ -31,7 +31,7 @@ from exp_power_cycle import show_qr_until_reboot, wait_camera_back, take_clip, I
 
 WINDOW_MS = 1.0
 MAX_REBOOTS = 20
-TAKE_S = 4
+TAKE_S = 8  # edges-only fit: ~240 edges -> SE ~0.6ms (4s gave ~0.9)
 PERIOD_MS = 1e3 / (60000 / 1001)
 
 
@@ -41,7 +41,10 @@ def phase_of(rec, out_dir):
     except RuntimeError as exc:  # pacing gate failed -> замер невалиден, не смерть
         print(f"  ! {exc}")
         return None
-    xs, ys = take_pairs(out_dir / rec["file"], idx2ns, sample_every=3)
+    # sample_every=2 == one stand period per sample: COHERENT sampling, the
+    # camera-vs-stand lag creeps by ~22us/sample and the fit residual drops
+    # from ~9ms (incoherent 1.5P steps) to ~0.3ms (2026-07-13)
+    xs, ys = take_pairs(out_dir / rec["file"], idx2ns, sample_every=2)
     if len(xs) < 12:
         return None
     A = np.vstack([np.ones_like(xs), xs]).T
