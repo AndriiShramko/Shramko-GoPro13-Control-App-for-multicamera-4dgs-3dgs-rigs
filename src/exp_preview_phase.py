@@ -125,10 +125,18 @@ def main():
         print(f"  file={pf} preview={pp} delta={row.get('delta_ms')}")
     cam.stop_keep_alive()
     deltas = [r["delta_ms"] for r in results if "delta_ms" in r]
-    summary = {"runs_ok": len(deltas), "deltas_ms": deltas,
-               "verdict": ("ПРЕВЬЮ = ВАЛИДНЫЙ ФАЗОМЕТР (|dphi|<0.5ms)"
-                           if deltas and all(d < 0.5 for d in deltas) else
-                           ("превью фазу НЕ отражает" if deltas else "нет данных"))}
+    summary = {"runs_ok": len(deltas), "deltas_ms": deltas}
+    if len(deltas) >= 2:
+        spread = max(deltas) - min(deltas)
+        summary["offset_ms"] = round(float(np.mean(deltas)), 3)
+        summary["offset_spread_ms"] = round(float(spread), 3)
+        # смещение превью-таймлайна = КОНСТАНТА -> вычитается калибровкой;
+        # фазометром превью делает СТАБИЛЬНОСТЬ смещения, не его нулевость
+        summary["verdict"] = ("ПРЕВЬЮ = ВАЛИДНЫЙ ФАЗОМЕТР (постоянное смещение, "
+                              "калибруется)" if spread < 0.3 else
+                              "смещение превью НЕстабильно — фазометр невалиден")
+    else:
+        summary["verdict"] = "нет данных"
     (out_dir / "result.json").write_text(
         json.dumps({"summary": summary, "runs": results}, indent=2,
                    ensure_ascii=False), encoding="utf-8")
