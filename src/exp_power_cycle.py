@@ -132,16 +132,19 @@ def main():
         cam.stop_keep_alive()
         rebooted = False
         for attempt in range(3):
-            if show_qr_until_reboot():
-                rebooted = True
-                break
-            print(f"  QR attempt {attempt}: не ребутнулась, wake и повтор")
+            # Labs-сканер живёт на превью-кадрах: stream/start зажигает
+            # конвейер сенсора -> QR читается (проверено 2026-07-13)
             try:
                 w = WiredGoPro(IP)
                 w.enable_wired_control()
+                w.get("/gopro/camera/stream/start?port=8554", timeout=10)
                 time.sleep(2)
             except Exception:
                 time.sleep(3)
+            if show_qr_until_reboot():
+                rebooted = True
+                break
+            print(f"  QR attempt {attempt}: не ребутнулась, повтор")
         if not rebooted:
             print("  камера НЕ ребутнулась после 3 попыток — стоп")
             rows.append({"cycle": c, "before": before, "after": None})
