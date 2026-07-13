@@ -47,21 +47,39 @@ from decode_stand import decode_frame  # noqa: E402
 
 def load_stand(log: Path):
     """Audit fix: use 'a' (after DwmFlush = vblank-aligned), NOT 'b'.
-    Also honors the pacing gate written by the repaired stand and skips
-    warm-up rows."""
-    idx2ns, wall0, perf0 = {}, None, None
-    pacing = None
+
+    PER-FRAME filtering (2026-07-13): background system load (night Defender
+    etc.) poisons a fraction of flips; a whole-log binary gate then starves
+    experiments. Instead keep ONLY frames whose intervals to BOTH neighbours
+    sit on the vblank grid — chaos frames drop out of idx2ns and can't match.
+    Gate: >=40% clean frames, else the log is unusable."""
+    rows, wall0, perf0 = [], None, None
+    period_ms = None
     for line in log.read_text(encoding="utf-8").splitlines():
         r = json.loads(line)
         if "wall_utc" in r:
             wall0 = dt.datetime.fromisoformat(r["wall_utc"]).timestamp()
             perf0 = r["perf_ns"]
-        elif "pacing" in r:
-            pacing = r["pacing"]
+            period_ms = r.get("period_ms")
         elif "i" in r and not r.get("w"):
-            idx2ns[r["i"]] = r["a"]
-    if pacing is not None and not pacing.get("PACING_GATE"):
-        raise RuntimeError(f"stand log FAILED pacing gate: {pacing}")
+            rows.append((r["i"], r["a"]))
+    if period_ms is None:
+        period_ms = 1000.0 / 30.0  # legacy logs: repaired stand writes it
+    lo, hi = period_ms - 1.5, period_ms + 1.5
+    idx2ns = {}
+    for k in range(1, len(rows) - 1):
+        d_prev = (rows[k][1] - rows[k - 1][1]) / 1e6
+        d_next = (rows[k + 1][1] - rows[k][1]) / 1e6
+        if lo <= d_prev <= hi and lo <= d_next <= hi:
+            idx2ns[rows[k][0]] = rows[k][1]
+    total = max(1, len(rows) - 2)
+    clean_frac = len(idx2ns) / total
+    if clean_frac < 0.4:
+        raise RuntimeError(
+            f"stand log unusable: only {clean_frac:.0%} clean frames ({log.name})")
+    if clean_frac < 0.9:
+        print(f"    stand {log.name}: {clean_frac:.0%} clean frames "
+              f"(load transients filtered per-frame)")
     return idx2ns, wall0, perf0
 
 
