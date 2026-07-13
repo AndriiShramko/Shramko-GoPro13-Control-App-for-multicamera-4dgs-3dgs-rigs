@@ -36,7 +36,11 @@ PERIOD_MS = 1e3 / (60000 / 1001)
 
 
 def phase_of(rec, out_dir):
-    idx2ns, _, _ = load_stand(Path(rec["stand_log"]))
+    try:
+        idx2ns, _, _ = load_stand(Path(rec["stand_log"]))
+    except RuntimeError as exc:  # pacing gate failed -> замер невалиден, не смерть
+        print(f"  ! {exc}")
+        return None
     xs, ys = take_pairs(out_dir / rec["file"], idx2ns, sample_every=3)
     if len(xs) < 12:
         return None
@@ -62,15 +66,20 @@ def main():
     cam = WiredGoPro(IP)
     cam.enable_wired_control()
     cam.start_keep_alive()
-    # 1) дрейф: два замера без ребута
+    # 1) дрейф: два замера без ребута (retry при провале гейта/декода)
     print("=== drift estimation (no reboot) ===")
-    r1 = take_clip(cam, out_dir, "drift1")
-    time.sleep(20)
-    r2 = take_clip(cam, out_dir, "drift2")
+    p1 = p2 = None
+    for attempt in range(3):
+        r1 = take_clip(cam, out_dir, f"drift1_{attempt}")
+        time.sleep(20)
+        r2 = take_clip(cam, out_dir, f"drift2_{attempt}")
+        p1, p2 = phase_of(r1, out_dir), phase_of(r2, out_dir)
+        if p1 and p2:
+            break
+        print(f"  drift attempt {attempt} failed, retry")
     cam.stop_keep_alive()
-    p1, p2 = phase_of(r1, out_dir), phase_of(r2, out_dir)
     if not (p1 and p2):
-        sys.exit("drift takes failed to decode")
+        sys.exit("drift takes failed после 3 попыток")
     dphi = (p2["phase_ms"] - p1["phase_ms"] + PERIOD_MS / 2) % PERIOD_MS - PERIOD_MS / 2
     drift_ms_per_s = dphi / (p2["t_s"] - p1["t_s"])
     print(f"phi1={p1['phase_ms']:.3f} phi2={p2['phase_ms']:.3f} "

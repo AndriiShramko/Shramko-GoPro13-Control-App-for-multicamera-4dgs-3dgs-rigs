@@ -84,8 +84,21 @@ def wait_camera_back(timeout_s: float = 120) -> bool:
     return False
 
 
+def kill_other_stands():
+    """Два fullscreen-стенда дерутся за DWM -> 29% хаоса пейсинга (E15 drift1).
+    Перед своим стендом убиваем чужие stand.py этого репо."""
+    subprocess.run(
+        ["powershell", "-Command",
+         "Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | "
+         "Where-Object {$_.CommandLine -like '*stand.py*'} | "
+         "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"],
+        capture_output=True, timeout=30)
+    time.sleep(1)
+
+
 def take_clip(cam, out_dir, label):
     """стенд -> дубль TAKE_S -> download; возвращает запись для анализа."""
+    kill_other_stands()
     stand = subprocess.Popen(
         [PY, str(REPO / "src" / "stand.py"), "counter", "--minutes", "1.0"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
