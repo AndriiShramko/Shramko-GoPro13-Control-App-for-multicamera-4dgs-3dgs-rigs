@@ -39,6 +39,23 @@ RSH-A13 ТОЖЕ имеет тумблеры сверху — но, в отли�
 - **Управляется и Pi, и Jetson** (оба Linux): uhubctl или vendor API — тривиально.
 - **Inline-VBUS-устройство на камеру НЕ НУЖНО**, если хаб делает PPPS. Остаётся запасным путём (Pololu MOSFET + GPIO), если честного 10-портового PPPS-хаба под нужный ток не найдётся.
 
+## ПРОВЕРЕННЫЕ ССЫЛКИ (WebFetch 2026-07-13, страницы живые)
+
+| Модель | Порты | Ток/порт | VBUS-cut | Цена | Наличие | Ссылка |
+|---|---|---|---|---|---|---|
+| **UUGear MEGA4** | 4 | 2.5 А (внеш.5V) | ✅ чипы-ключи AP2511 + VL817, uhubctl | €36.89 c НДС / £32.10 | 96 шт (uugear) / 7 (ThePiHut) | uugear.com/product/mega4-4-port-usb-3-ppps-hub-for-raspberry-pi-4b/ · thepihut.com/products/mega4-4-port-usb-3-1-ppps-hub-for-raspberry-pi-4 |
+| **Yepkit YKUSH3** | 3 | НИЗКИЙ ~1А ⚠️ | ✅ вендор: «VBUS and data-lines switched OFF» | €124.99 | в наличии, ЕС(PT) | yepkit.com/product/300110/YKUSH3 |
+| **Rosonway RSH-A13** | 13 | ~2А, лимит 72Вт БП ⚠️ | ✅ uhubctl #423 (VIA VL822) | ~$55-70 | Amazon US/rshtech; ЕС слабо | amazon.com/dp/B09HBQS54V |
+| **Acroname USBHub3+ (S79)** | 8 | 4 А + монитор I | ✅ вендор, BrainStem API | $825 | в наличии, ЕС via DigiKey/Mouser | acroname.com/store/s79-usbhub-3p |
+| **Acroname USBHub2x4 (S77)** | 4 (USB2) | 2.5 А программ. | ✅ вендор | $425 | в наличии | acroname.com/store/s77-usbhub-2x4 |
+| **Cambrionix SuperSync15** | 15 | 2.1 А впритык ⚠️ | ✅ Cambrionix API | £549 | РАСПРОДАН у вендора | cambrionix.com/products/supersync15 |
+
+Новые кандидаты (цены поиском, не WebFetch): **Cambrionix PDSync-C4** (4× USB-C PD, до 60 Вт/порт — огромный запас под GoPro, ~$500), PowerPad15S (15× USB-A 2.1А ~$500), ThunderSync3-16 (16 портов ~$1899), Acroname USBHub3c (USB-C программируемый).
+
+Токовая правда: GoPro 4K без батареи ~2 А/порт. **Безопасны по току: MEGA4 (2.5А), Acroname (4А), Cambrionix PDSync-C4 (60Вт USB-C).** Рискованны: YKUSH3 (низкий ток — переключательный, не зарядный), SuperSync15 (2.1А впритык + распродан). НЕ брать вслепую: Realtek-хабы RSH-A16/A10 (VBUS не подтверждён).
+
+ЕС/Польша: прямых карточек MEGA4/RSH-A13 на Botland/Kamami/Allegro в общем поиске нет — реальные маршруты MEGA4: **uugear.com (Чехия, ЕС) и ThePiHut (UK, межд.)**; на Botland/Kamami добить точечным запросом.
+
 ## Гейт перед закупкой (обязателен)
 
 uhubctl НЕ работает на Windows (winusb.sys) → нужен Linux-хост (Pi/Jetson). Тест: (1) HERO13 пишет 4K8:7@60 от хаба БЕЗ батареи ≥5 мин; (2) `uhubctl -a off` реально гасит камеру; (3) камера сама бутится+пишет при возврате VBUS (Labs auto-record).
