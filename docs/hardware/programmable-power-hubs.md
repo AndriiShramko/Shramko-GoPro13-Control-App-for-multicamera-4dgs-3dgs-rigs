@@ -80,6 +80,20 @@ RSH-A13 ТОЖЕ имеет тумблеры сверху — но, в отли�
 ### ⚠️ Критерий, который я упускал: UPSTREAM должен быть USB3, НЕ Thunderbolt
 Заказчик поймал: **Cambrionix ThunderSync3-C10 требует Thunderbolt 3 upstream** (подтв. WebFetch: «x1 Thunderbolt 3 40Gbps upstream»). Raspberry Pi и Jetson НЕ имеют Thunderbolt → данные НЕ пойдут, только зарядка. **ОТКЛОНЁН.** Правило для ВСЕХ кандидатов: upstream = обычный USB-C/USB3 (работает на Pi/Jetson), не TB. Проверять upstream у каждого промышленного хаба (многие device-farm — Thunderbolt/Mac-ориентированы).
 
+### Расширенный поиск 2026-07-13 (5 фильтров, upstream USB3 + суммарные ватты)
+
+**ПРОШЁЛ все 5 фильтров под 8-10 камер — только Cambrionix SuperSync15:**
+- Upstream = **USB-A 5 Гбит/с, НЕ Thunderbolt** (2 офиц. источника: страница продукта + knowledge base; конфликтующий реселлер Batterfly скопировал ТТХ ThunderSync + дал неверную цену). Номенклатура решает: TB-модели = «ThunderSync», USB = «SuperSync». (⚠ физический хост-разъём подтвердить у дилера — из чистой spec-таблицы не достали, PDF 404.)
+- 15× USB 3.2 Gen1, **180 Вт БП**, 2.1А на все 15 одновременно → 10+ камер с запасом.
+- VBUS-off реальный: режим `off` снимает VBUS («mimic unplugging»), CLI-manual + Port Modes. Управление JSON-RPC/CLI демон cbrxd (не uhubctl).
+- Слабость: единый 5Гбит/с аплинк на 15 портов → при сливе 10×4K ~45-50 МБ/с на камеру (врождённо у любого одно-аплинкового хаба — сливать пачками). Наличие плавает (проверить сток).
+
+**Новое EU-открытие (если риг ужать до 7 камер): Exsys EX-1510HMVS** — 10× USB3.2 Gen1, upstream USB-B (не TB), **реальный VBUS-off** («switch USB bus voltage on/off per port»), офиц. Linux-софт, семейство в uhubctl (#303), немецкий бренд, ~€215 (Distrelec/Reichelt/RS). НО **75 Вт суммарно (1.5А/порт) = 7 камер @2А**. EU-близнец Coolgear на той же 1.5А-платформе.
+
+**Отклонены (новое):** Rosonway RSH-A16 (100Вт БП, но VBUS-cut ФИКТИВЕН на Realtek-чипе — uhubctl #417 «reports power off, but doesn't cut VBUS»); StarTech HB30A10AME / Delock / Inateck / Sabrent (нет софт-VBUS API, только физкнопки); Silex DS-600 (USB-over-IP, 1GbE аплинк — узко, 2 порта); Waveshare 2in4out (25Вт=2-3кам); Cambrionix PowerPad15S (upstream USB2.0 + EOL).
+
+**Рынок раскалывается надвое:** мощные charge-хабы 100Вт проваливают честный VBUS-cut (data-only/фиктив), а managed-индустриальные с честным VBUS-cut упираются в 65-75Вт = 7 камер. **≥100Вт + реальный VBUS-cut + не-TB одновременно = только SuperSync15 (~€640) и Acroname USBHub3c Pro ($1200).** (Идёт адверсариальная проверка SuperSync15.)
+
 ### Архитектура (вердикт)
 - **(а) один промышленный хаб — РЕКОМЕНДАЦИЯ №1: Cambrionix SuperSync15** (15 портов, 150 Вт, USB3, per-port VBUS под Linux/ARM, одна коробка). ⚠ был распродан у вендора — проверить наличие/дилеров. Быстрейший offload — 2× Acroname USBHub3c + 480Вт БП (10G, открытый SDK), но дороже.
 - **(б) открытый бюджет: 5× UUGear MEGA4 + uhubctl** (~€220 с БП, полностью открыто, 2 камеры/хаб, отказоустойчиво), минус кабельный хаос 5 хабов+5 БП.
