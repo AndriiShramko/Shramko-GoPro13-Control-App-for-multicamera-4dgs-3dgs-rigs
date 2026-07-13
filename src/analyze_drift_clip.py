@@ -18,9 +18,8 @@ sys.path.insert(0, str(REPO / "src"))
 import cv2
 import numpy as np
 
-from exp_phase_determinism import load_stand
+from exp_phase_determinism import load_stand, take_pairs
 from exp_drift_clean import robust_fit
-from decode_stand import decode_frame
 
 
 def main():
@@ -45,28 +44,10 @@ def main():
     print(f"стенд гейт PASS, {len(idx2ns)} меток, "
           f"idx {min(idx2ns)}..{max(idx2ns)}")
 
-    cap = cv2.VideoCapture(str(clip))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    nframes = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f"клип: {fps:.3f} fps, {nframes} кадров, ~{nframes/fps/60:.1f} мин")
-    loc = None
-    pts, host = [], []
-    seen = set()
-    n = 0
-    while True:
-        ret, img = cap.read()
-        if not ret:
-            break
-        if n % args.sample == 0:
-            p = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
-            out = decode_frame(img, loc)
-            loc = out["loc"] or loc
-            if out["idx"] is not None and out["idx"] in idx2ns and out["idx"] not in seen:
-                seen.add(out["idx"])
-                pts.append(p); host.append(idx2ns[out["idx"]] / 1e9)
-        n += 1
-    cap.release()
-    pts = np.array(pts); host = np.array(host)
+    # take_pairs applies the temporal-model outlier rejection (drops ±stand-period
+    # mis-decodes that otherwise poison a long-baseline fit — bug in the first
+    # recovery version gave 21.8ms resid / nonsense segments, 2026-07-13)
+    pts, host = take_pairs(clip, idx2ns, sample_every=args.sample)
     if len(pts) < 40:
         print(f"decode {len(pts)}<40 — мало"); return
     base = float(pts[-1] - pts[0])
