@@ -13,6 +13,8 @@ GoPro cameras have **no genlock input** — GoPro dropped hardware shutter-phase
 
 **All research code + honest write-ups live on the [`research/usb-sync-experiments`](https://github.com/AndriiShramko/Shramko-GoPro13-Control-App-for-multicamera-4dgs-3dgs-rigs/tree/research/usb-sync-experiments) branch** (see its `docs/` — `PHASE-VS-GENLOCK.md`, `ROLLING-SHUTTER-CEILING.md`, `DRIFT-HONEST.md`, hardware notes).
 
+**Cross-industry input:** [`docs/PTP-LUXONIS-OAK4-LESSONS.md`](docs/PTP-LUXONIS-OAK4-LESSONS.md) — what PTP (IEEE 1588) time sync on industrial machine-vision cameras does and does *not* transfer to a GoPro rig. Short version: PTP disciplines *clocks*, not *shutter phase* — even a vendor shipping PTP still runs a separate hardware FSYNC wire for exposure alignment, which independently confirms our "clocks ≠ phase" finding. The transferable part is PTP's *closed-loop servo* idea: we cannot steer a GoPro's clock, but we can continuously *observe* phase during a take, turning drift from an error into a modeled quantity.
+
 **Open source & seeking collaborators.** If you want to build your own synchronized GoPro 4DGS rig, or want to develop this further — get in touch (github.com/AndriiShramko). Support for the next-stage hardware is welcome: paypal.me/AndriiShramko. *To be continued.*
 
 ---
